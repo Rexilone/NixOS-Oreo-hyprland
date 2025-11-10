@@ -2,23 +2,39 @@
 
 {
   imports =
-    [
+    [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
-      ./waybar.nix
     ];
 
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.systemd-boot.configurationLimit = 10;
-
+  boot.loader = {
+    efi = {
+      efiSysMountPoint = "/boot";    
+    };
+    grub = {
+      enable = true;
+      device = "nodev";
+      efiSupport = true;
+      efiInstallAsRemovable = true;
+      extraEntriesBeforeNixOS = false;
+      useOSProber = true;
+      extraEntries = ''
+        menuentry "Reboot" {
+          reboot
+        }
+        menuentry "PowerOff" {
+          halt
+        }
+      '';
+    };
+  };
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Configure network proxy if necessary
   # networking.proxy.default = "http://user:password@proxy:port/";
   # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
-
+  programs.fish.enable = true;
+  users.defaultUserShell = pkgs.fish;
   # Enable networking
   networking.networkmanager.enable = true;
 
@@ -40,98 +56,98 @@
     LC_TIME = "ru_RU.UTF-8";
   };
 
-  # Configure keymap in X11
   services.xserver.xkb = {
     layout = "ru";
     variant = "";
   };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.user = {
+  users.users.lik = {
     isNormalUser = true;
-    description = " user";
+    shell = pkgs.fish;
+    description = "lik";
     extraGroups = [ "networkmanager" "wheel" ];
     packages = with pkgs; [];
   };
 
   # Enable automatic login for the user.
-  services.getty.autologinUser = "user";
+  services.getty.autologinUser = "lik";
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
+  
+  environment.loginShellInit = ''
+  if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    exec Hyprland
+  fi
+  '';
+#  services.xserver = {
+#    enable = true;
+#    
+#    layout = "us,ru";
+#    xkbOptions = "shift_alt_toggle";
+#
+#    displayManager.sddm = {
+#      enable = true;
+#      wayland.enable = true;
+#    };
+#
+#  };
 
-  programs.hyprland = {
-    enable = true;
-    portalPackage = pkgs.xdg-desktop-portal-hyprland;
-    xwayland.enable = true;
-  };
 
-  programs.steam = {
-    enable = true;
-    remotePlay.openFirewall = true; # Разрешить удаленную игру
-    dedicatedServer.openFirewall = true; # Разрешить серверы
-  };
+  gtk.iconCache.enable = true;
+  programs.hyprland.enable = true;
 
   environment.systemPackages = with pkgs; [
-    bibata-cursors
-
-    neovim
-    vscode
-
-    xdg-desktop-portal-hyprland
-    xdg-desktop-portal-gtk
-    xdg-desktop-portal
-
-    jq
-    mpv
-    git
-    wget
-    neohtop
-    fastfetch
-    pkgs.kitty
-    xfce.thunar
-
-    hyprlock
-    hyprshot
-
+    # system
+    nftables
+    #bluetooth
     bluez
     bluez-tools
     blueman
-    
+    # Hyprland
+    neovim
+    hyprland
+    hyprlock
+    hyprpaper
+    hyprpicker
+    hyprshot
+    kitty
+    waybar
+    rofi
+    nwg-look
+    git
+    curl
+    fastfetch
+    nemo
+    # Applications
     firefox
-    rustdesk
-    obs-studio
-
     telegram-desktop
-    steam
-
-    swww
-    wofi
+    vscode
+    # decoration
+    papirus-icon-theme
+    graphite-gtk-theme
+    bibata-cursors
+    # shell
+    fish
+    #unstbr
+    onlyoffice-bin
   ];
 
-  fonts = {
-    packages = with pkgs; [
-      jetbrains-mono
+  
+    fonts.packages = with pkgs; [
       font-awesome
+      font-awesome_5
+      jetbrains-mono
+      dejavu_fonts
     ];
-    # fontDir.enable = true; 
-    enableDefaultPackages = true;
-    enableGhostscriptFonts = true;
-  };
-
-  services.flatpak.enable = true;
-
-  services.xserver.displayManager.defaultSession = "hyprland";
-
-  services.xserver.displayManager.sessionCommands = ''
-    xsetroot -cursor_name left_ptr
-  '';
 
   environment.sessionVariables = {
     XCURSOR_THEME = "Bibata-Modern-Ice";
     XCURSOR_SIZE = "24";
   };
-  # ... остальная конфигурация ...
+
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;
@@ -140,7 +156,23 @@
   #   enableSSHSupport = true;
   # };
 
-# services.openssh.enable = true;
+  # List services that you want to enable:
+
+  # Enable the OpenSSH daemon.
+  # services.openssh.enable = true;
+
+  # Open ports in the firewall.
+  # networking.firewall.allowedTCPPorts = [ ... ];
+  # networking.firewall.allowedUDPPorts = [ ... ];
+  # Or disable the firewall altogether.
+  # networking.firewall.enable = false;
+
+  # This value determines the NixOS release from which the default
+  # settings for stateful data, like file locations and database versions
+  # on your system were taken. It‘s perfectly fine and recommended to leave
+  # this value at the release version of the first install of this system.
+  # Before changing this value read the documentation for this option
+  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "25.05"; # Did you read the comment?
 
 }
