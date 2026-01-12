@@ -3,16 +3,15 @@
 		prismlauncher
 		telegram-desktop
 		vesktop
+		onlyoffice-desktopeditors
+		yandex-music
+		scrcpy
+		android-tools
+		github-desktop
 	];
 	home = {
 		enableNixpkgsReleaseCheck = false;
 		stateVersion = "25.11";
 	};
 
-	programs.bash = {
-		enable = true;
-		shellAliases = {
-			rebuild = "sudo nixos-rebuild switch";
-		};
-	};
 }
