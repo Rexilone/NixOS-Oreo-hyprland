@@ -78,7 +78,9 @@
     layout = "ru";
     variant = "";
   };
-
+  
+  virtualisation.virtualbox.host.enable = true;
+  boot.kernelParams = [ "kvm.enable_virt_at_load=0" ];
   # Define a user account. Don't forget to set a password with ‘passwd’.
   services.getty.autologinUser = "rexilone";
   users.users.rexilone = {
@@ -121,6 +123,9 @@
     p7zip
     mpv
     git
+    # bluetooth
+    bluez
+    bzmenu
   ];
 
   fonts.fontDir.enable = true;
@@ -139,11 +144,6 @@
     enable = true;
     remotePlay.openFirewall = true; # Open ports for Steam Remote Play
     dedicatedServer.openFirewall = true; # Open ports for Source Dedicated Server
-  };
-
-  virtualisation.virtualbox.host = {
-    enable = true;
-    enableExtensionPack = true;
   };
 
   # Some programs need SUID wrappers, can be configured further or are
