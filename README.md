@@ -1,1 +1,1 @@
-# NixOS-hyprland-l1qued
+# NixOS-Rosa
