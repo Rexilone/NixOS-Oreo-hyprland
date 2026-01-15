@@ -6,7 +6,6 @@
     defaultEditor = true;
 
     keymaps = [
-      # Открыть Neo-tree по нажатию Ctrl+n
       {
         mode = "n";
         key = "<C-n>";
@@ -14,7 +13,6 @@
         options.silent = true;
       }
 
-      # Быстрое сохранение через Space + w
       {
         mode = "n";
         key = "<leader>w";
@@ -28,9 +26,9 @@
       neo-tree.enable = true;
       lightline = {
         enable = true;
-	settings = {
-	  colorscheme = "Tomorrow_Night_Bright";
-	  separator = {
+    	settings = {
+	      colorscheme = "Tomorrow_Night_Bright";
+	      separator = {
             left = "";
             right = "";
           };
@@ -38,7 +36,6 @@
             left = "";
             right = "";
           };
- 	    # Настройка строк состояния (активной и неактивной)
           active = {
             left = [
               [ "mode" "paste" ]
