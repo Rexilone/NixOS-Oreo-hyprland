@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./modules/bluetooth.nix
       ./modules/nixvim.nix
 #      ./hardware.nix
       inputs.home-manager.nixosModules.home-manager
