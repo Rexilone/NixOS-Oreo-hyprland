@@ -9,8 +9,12 @@
 			url = "github:nix-community/home-manager/release-25.11";
 			inputs.nixpkgs.follows = "nixpkgs";
 		};
+		quickshell = {
+      			url = "github:quickshell-mirror/quickshell";
+      			inputs.nixpkgs.follows = "nixpkgs";
+    		};
 	};
-	outputs = { self, nixpkgs, zen-browser, zapret-discord-youtube, nixvim, ... }@inputs:
+	outputs = { self, nixpkgs, zen-browser, zapret-discord-youtube, nixvim, quickshell, ... }@inputs:
 		let
 			system = "x86_64-linux";
 		in{
@@ -19,8 +23,13 @@
 			specialArgs = { inherit inputs system; };
 			modules = [
 			./configuration.nix
-			
-                        nixvim.nixosModules.nixvim 
+
+                        nixvim.nixosModules.nixvim
+			{
+          			environment.systemPackages = [
+            			quickshell.packages.x86_64-linux.default
+          			];
+        		}
 			zapret-discord-youtube.nixosModules.default
         		{
         			services.zapret-discord-youtube = {
