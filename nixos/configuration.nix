@@ -56,7 +56,7 @@
 
   # Enable networking
   networking.networkmanager.enable = true;
-
+  #networking.useDHCP = lib.mkDefault true;
   # Set your time zone.
   time.timeZone = "Asia/Yakutsk";
 
@@ -82,6 +82,7 @@
   };
   
   virtualisation.virtualbox.host.enable = true;
+  virtualisation.virtualbox.guest.enable = true;
   boot.kernelParams = [ "kvm.enable_virt_at_load=0" ];
   # Define a user account. Don't forget to set a password with ‘passwd’.
   services.getty.autologinUser = "rexilone";
@@ -125,6 +126,7 @@
     swww
     rofi
     nemo
+    jq
     p7zip
     # для дисков / флешек
     ntfs3g
@@ -175,6 +177,9 @@
   programs.dconf.profiles.user.databases = [{
     settings."org/gnome/desktop/interface".gtk-theme = "Space";
   }];
+
+  systemd.services.lactd.enable = true;
+  systemd.services.lactd.wantedBy = [ "multi-user.target" ];
 
   environment.sessionVariables = {
     GTK_THEME = "Space";
