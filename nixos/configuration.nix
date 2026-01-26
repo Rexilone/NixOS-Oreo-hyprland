@@ -23,6 +23,19 @@
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot = {
+  # Включение Plymouth
+    plymouth = {
+      enable = true;
+      # Выбор темы (например, стандартная nixos-breeze)
+      theme = "breeze"; 
+    };
+
+    # Параметры ядра для "тихой" загрузки (скрывают текст логов)
+    kernelParams = [ "quiet" "splash" "boot.shell_on_fail" "loglevel=3" "rd.systemd.show_status=false" "rd.udev.log_level=3" "udev.log_priority=3" ];
+    # Использование systemd в initrd для более раннего запуска Plymouth
+    initrd.systemd.enable = true;
+  };
 
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
@@ -88,13 +101,18 @@
     btop
     swww
     rofi
-    nemo
     jq
     p7zip
     obs-studio
+    # file
+    xfce.thunar
+    xfce.thunar-archive-plugin
+    xfce.thunar-volman
+    xfce.thunar-media-tags-plugin
     # для дисков / флешек
     ntfs3g
     udiskie
+    gvfs
     # 123
     mpv
     git
@@ -104,6 +122,9 @@
     bluez-tools
     blueman    
   ];
+
+  security.polkit.enable = true; # для тунара шоб автомонтировал
+  services.gvfs.enable = true; # для телефона монтирования
 
   fonts.fontDir.enable = true;
   fonts.packages = with pkgs; [
