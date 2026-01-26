@@ -7,8 +7,7 @@
 		yandex-music
 		scrcpy
 		android-tools
-		github-desktop
-        adwsteamgtk
+	    adwsteamgtk
 	];
 	home = {
 		enableNixpkgsReleaseCheck = false;
