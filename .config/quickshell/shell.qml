@@ -30,8 +30,9 @@ ShellRoot {
     property string networkSSID: ""
     property string currentLanguage: "EN"
 
-    // Dynamic Island visibility
+    // Dynamic Island
     property bool showDynamicIsland: false
+    property bool isMouseOverIsland: false
 
     // Music Player
     property string musicTitle: "No Track Playing"
@@ -39,15 +40,17 @@ ShellRoot {
     property string musicAlbum: ""
     property string musicArtUrl: ""
     property bool musicPlaying: false
-    property bool musicCanPlay: false
-    property bool musicCanPause: false
-    property bool musicCanGoNext: false
-    property bool musicCanGoPrevious: false
+    property string activePlayer: ""
 
     // Wallpapers
     property var wallpaperList: []
     property int currentWallpaperIndex: 0
     property string wallpaperBuffer: ""
+    
+    // Carousel animation
+    property real carouselPosition: 0
+    property bool isAnimating: false
+    property int slideDirection: 0  // -1 = prev, 1 = next
 
     // Notifications
     property var notifications: [
@@ -56,7 +59,7 @@ ShellRoot {
     ]
 
     // Network
-    property int currentNetworkTab: 0 // 0 = WiFi, 1 = Bluetooth
+    property int currentNetworkTab: 0
     property var wifiNetworks: [
         { ssid: "Home WiFi", signal: 85, secured: true, connected: true },
         { ssid: "Guest Network", signal: 60, secured: true, connected: false },
@@ -68,10 +71,67 @@ ShellRoot {
         { name: "Sony Headphones", connected: false, battery: 0, type: "audio" }
     ]
 
-    // User changing flags для ползунков
+    // User changing flags
     property bool brightnessUserChanging: false
     property bool volumeUserChanging: false
     property bool micUserChanging: false
+
+    // Управление Island
+    function openIsland() {
+        hideIslandTimer.stop()
+        root.showDynamicIsland = true
+    }
+
+    function closeIsland() {
+        root.showDynamicIsland = false
+    }
+
+    Timer {
+        id: hideIslandTimer
+        interval: 200
+        onTriggered: {
+            if (!root.isMouseOverIsland) {
+                root.showDynamicIsland = false
+            }
+        }
+    }
+
+    // Анимация карусели - плавный переход
+    property real animProgress: 0  // 0 = начало, 1 = конец анимации
+    
+    NumberAnimation {
+        id: carouselAnimation
+        target: root
+        property: "animProgress"
+        from: 0
+        to: 1
+        duration: 350
+        easing.type: Easing.OutCubic
+        onFinished: {
+            root.currentWallpaperIndex = root.slideDirection === 1 
+                ? (root.currentWallpaperIndex + 1) % root.wallpaperList.length
+                : (root.currentWallpaperIndex - 1 + root.wallpaperList.length) % root.wallpaperList.length
+            root.isAnimating = false
+            root.animProgress = 0
+            root.slideDirection = 0
+        }
+    }
+
+    function goToPrevWallpaper() {
+        if (root.isAnimating || root.wallpaperList.length <= 1) return
+        root.isAnimating = true
+        root.slideDirection = -1
+        root.animProgress = 0
+        carouselAnimation.restart()
+    }
+
+    function goToNextWallpaper() {
+        if (root.isAnimating || root.wallpaperList.length <= 1) return
+        root.isAnimating = true
+        root.slideDirection = 1
+        root.animProgress = 0
+        carouselAnimation.restart()
+    }
 
     // ===== ЯЗЫК =====
     Timer {
@@ -95,25 +155,6 @@ ShellRoot {
                     root.currentLanguage = layout.substring(0, 2).toUpperCase()
                 } else {
                     root.currentLanguage = "EN"
-                }
-            }
-        }
-    }
-
-    Process {
-        id: hyprlandSocket
-        running: true
-        command: ["sh", "-c", `
-            socat -u UNIX-CONNECT:/tmp/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock - 2>/dev/null | while IFS= read -r line; do
-                if echo "$line" | grep -q "activelayout>>"; then
-                    echo "LAYOUT_CHANGED"
-                fi
-            done
-        `]
-        stdout: SplitParser {
-            onRead: data => {
-                if (data.includes("LAYOUT_CHANGED")) {
-                    langProcess.running = true
                 }
             }
         }
@@ -164,15 +205,15 @@ ShellRoot {
 
     Process {
         id: batteryLevelProcess
-        command: ["sh", "-c", "cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -1 || echo '0'"]
+        command: ["sh", "-c", "cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -1 || echo '100'"]
         stdout: SplitParser {
-            onRead: data => root.batteryLevel = parseInt(data.trim()) || 0
+            onRead: data => root.batteryLevel = parseInt(data.trim()) || 100
         }
     }
 
     Process {
         id: batteryStatusProcess
-        command: ["sh", "-c", "cat /sys/class/power_supply/BAT*/status 2>/dev/null | head -1 || echo 'Unknown'"]
+        command: ["sh", "-c", "cat /sys/class/power_supply/BAT*/status 2>/dev/null | head -1 || echo 'Full'"]
         stdout: SplitParser {
             onRead: data => root.batteryCharging = data.trim() === "Charging"
         }
@@ -192,7 +233,7 @@ ShellRoot {
 
     Process {
         id: brightnessProcess
-        command: ["sh", "-c", "brightnessctl get 2>/dev/null && brightnessctl max 2>/dev/null | awk 'NR==1{current=$1} NR==2{max=$1} END{printf \"%.0f\", (current/max)*100}' || echo '50'"]
+        command: ["sh", "-c", "brightnessctl -m | cut -d',' -f4 | tr -d '%'"]
         stdout: SplitParser {
             onRead: data => {
                 if (!root.brightnessUserChanging) {
@@ -210,29 +251,22 @@ ShellRoot {
 
     // ===== Volume монитор =====
     Timer {
-        interval: 100
+        interval: 200
         running: true
         repeat: true
         onTriggered: {
-            if (!root.volumeUserChanging) {
-                volumeProcess.running = true
-            }
-            if (!root.micUserChanging) {
-                micProcess.running = true
-            }
+            if (!root.volumeUserChanging) volumeProcess.running = true
+            if (!root.micUserChanging) micProcess.running = true
         }
     }
 
     Process {
         id: volumeProcess
-        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{muted=($3==\"[MUTED]\")?1:0; vol=int($2*100); print vol\" \"muted}' || pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d '%' | awk '{print $1\" 0\"}'"]
+        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2*100)}'"]
         stdout: SplitParser {
             onRead: data => {
                 if (!root.volumeUserChanging) {
-                    let parts = data.trim().split(' ')
-                    if (parts.length >= 2) {
-                        root.volume = parseInt(parts[0]) || 0
-                    }
+                    root.volume = parseInt(data.trim()) || 0
                 }
             }
         }
@@ -240,14 +274,11 @@ ShellRoot {
 
     Process {
         id: micProcess
-        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | awk '{muted=($3==\"[MUTED]\")?1:0; vol=int($2*100); print vol\" \"muted}' || pactl get-source-volume @DEFAULT_SOURCE@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d '%' | awk '{print $1\" 0\"}'"]
+        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ | awk '{print int($2*100)}'"]
         stdout: SplitParser {
             onRead: data => {
                 if (!root.micUserChanging) {
-                    let parts = data.trim().split(' ')
-                    if (parts.length >= 2) {
-                        root.micVolume = parseInt(parts[0]) || 0
-                    }
+                    root.micVolume = parseInt(data.trim()) || 0
                 }
             }
         }
@@ -256,13 +287,13 @@ ShellRoot {
     Process {
         id: volumeChangeProcess
         property int targetVolume: 50
-        command: ["sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ " + targetVolume + "% 2>/dev/null || pactl set-sink-volume @DEFAULT_SINK@ " + targetVolume + "%"]
+        command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", (targetVolume / 100).toFixed(2)]
     }
 
     Process {
         id: micChangeProcess
         property int targetVolume: 50
-        command: ["sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ " + targetVolume + "% 2>/dev/null || pactl set-source-volume @DEFAULT_SOURCE@ " + targetVolume + "%"]
+        command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SOURCE@", (targetVolume / 100).toFixed(2)]
     }
 
     // ===== Network монитор =====
@@ -275,29 +306,23 @@ ShellRoot {
 
     Process {
         id: networkProcess
-        command: ["sh", "-c", "if ping -c 1 8.8.8.8 >/dev/null 2>&1; then if iwgetid -r 2>/dev/null; then echo 'wifi'; else echo 'ethernet'; fi; else echo 'disconnected'; fi"]
+        command: ["sh", "-c", "nmcli -t -f TYPE,STATE,CONNECTION device | grep connected | head -1"]
         stdout: SplitParser {
             onRead: data => {
-                let status = data.trim()
-                if (status === "wifi") {
-                    root.networkStatus = "wifi"
-                    ssidProcess.running = true
-                } else if (status === "ethernet") {
-                    root.networkStatus = "ethernet"
-                    root.networkSSID = ""
+                let parts = data.trim().split(':')
+                if (parts.length >= 3) {
+                    if (parts[0] === "wifi") {
+                        root.networkStatus = "wifi"
+                        root.networkSSID = parts[2]
+                    } else if (parts[0] === "ethernet") {
+                        root.networkStatus = "ethernet"
+                        root.networkSSID = parts[2]
+                    }
                 } else {
                     root.networkStatus = "disconnected"
                     root.networkSSID = ""
                 }
             }
-        }
-    }
-
-    Process {
-        id: ssidProcess
-        command: ["sh", "-c", "iwgetid -r 2>/dev/null || echo ''"]
-        stdout: SplitParser {
-            onRead: data => root.networkSSID = data.trim()
         }
     }
 
@@ -307,81 +332,122 @@ ShellRoot {
         running: true
         repeat: true
         onTriggered: {
-            playerctlMetadataProcess.running = true
-            playerctlStatusProcess.running = true
+            playerListProcess.running = true
         }
     }
 
     Process {
-        id: playerctlMetadataProcess
-        command: ["sh", "-c", "playerctl metadata --format '{{title}}|{{artist}}|{{album}}|{{mpris:artUrl}}' 2>/dev/null || echo 'No Track Playing|Unknown Artist||'"]
+        id: playerListProcess
+        command: ["playerctl", "-l"]
         stdout: SplitParser {
             onRead: data => {
-                let parts = data.trim().split('|')
-                root.musicTitle = parts[0] || "No Track Playing"
-                root.musicArtist = parts[1] || "Unknown Artist"
-                root.musicAlbum = parts[2] || ""
-                root.musicArtUrl = parts[3] || ""
+                let players = data.trim().split('\n').filter(p => p.length > 0)
+                if (players.length > 0) {
+                    let player = players.find(p => 
+                        p.includes("firefox") || 
+                        p.includes("chromium") || 
+                        p.includes("chrome") ||
+                        p.includes("yandex") ||
+                        p.includes("brave") ||
+                        p.includes("opera") ||
+                        p.includes("vivaldi") ||
+                        p.includes("edge")
+                    ) || players[0]
+                    
+                    root.activePlayer = player
+                    playerMetadataProcess.running = true
+                    playerStatusProcess.running = true
+                } else {
+                    root.activePlayer = ""
+                    root.musicTitle = "No Track Playing"
+                    root.musicArtist = "Unknown Artist"
+                    root.musicPlaying = false
+                }
             }
         }
     }
 
     Process {
-        id: playerctlStatusProcess
-        command: ["sh", "-c", "playerctl status 2>/dev/null || echo 'Stopped'"]
+        id: playerMetadataProcess
+        command: ["sh", "-c", root.activePlayer ? 
+            "playerctl -p '" + root.activePlayer + "' metadata --format '{{title}}|||{{artist}}|||{{album}}|||{{mpris:artUrl}}' 2>/dev/null" : 
+            "echo ''"]
         stdout: SplitParser {
             onRead: data => {
-                let status = data.trim()
-                root.musicPlaying = (status === "Playing")
-                root.musicCanPlay = (status !== "Stopped")
-                root.musicCanPause = (status === "Playing")
-                root.musicCanGoNext = (status !== "Stopped")
-                root.musicCanGoPrevious = (status !== "Stopped")
+                let parts = data.trim().split('|||')
+                if (parts.length >= 1 && parts[0]) {
+                    root.musicTitle = parts[0] || "No Track Playing"
+                    root.musicArtist = parts[1] || "Unknown Artist"
+                    root.musicAlbum = parts[2] || ""
+                    root.musicArtUrl = parts[3] || ""
+                }
             }
         }
     }
 
     Process {
-        id: playerctlPlayPauseProcess
-        command: ["playerctl", "play-pause"]
+        id: playerStatusProcess
+        command: ["sh", "-c", root.activePlayer ? 
+            "playerctl -p '" + root.activePlayer + "' status 2>/dev/null" : 
+            "echo 'Stopped'"]
+        stdout: SplitParser {
+            onRead: data => {
+                root.musicPlaying = (data.trim() === "Playing")
+            }
+        }
     }
 
     Process {
-        id: playerctlNextProcess
-        command: ["playerctl", "next"]
+        id: playerPlayPauseProcess
+        command: ["sh", "-c", root.activePlayer ? 
+            "playerctl -p '" + root.activePlayer + "' play-pause" : 
+            "playerctl play-pause"]
     }
 
     Process {
-        id: playerctlPreviousProcess
-        command: ["playerctl", "previous"]
+        id: playerNextProcess
+        command: ["sh", "-c", root.activePlayer ? 
+            "playerctl -p '" + root.activePlayer + "' next" : 
+            "playerctl next"]
+    }
+
+    Process {
+        id: playerPreviousProcess
+        command: ["sh", "-c", root.activePlayer ? 
+            "playerctl -p '" + root.activePlayer + "' previous" : 
+            "playerctl previous"]
     }
 
     // ===== Wallpaper Scanner =====
     Timer {
-        interval: 5000
+        interval: 10000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: wallpaperScanProcess.running = true
+        onTriggered: {
+            root.wallpaperBuffer = ""
+            wallpaperScanProcess.running = true
+        }
     }
 
     Process {
         id: wallpaperScanProcess
-        command: ["sh", "-c", "find ~/Pictures/Wallpapers -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' \\) 2>/dev/null | sort"]
+        command: ["sh", "-c", "find $HOME/Pictures/Wallpapers -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' \\) 2>/dev/null | sort | head -100"]
         
         stdout: SplitParser {
+            splitMarker: "\n"
             onRead: data => {
-                root.wallpaperBuffer += data
+                if (data.trim()) {
+                    root.wallpaperBuffer += data.trim() + "\n"
+                }
             }
         }
         
         onRunningChanged: {
             if (!running && wallpaperBuffer.length > 0) {
                 let lines = wallpaperBuffer.trim().split('\n').filter(x => x.trim() !== '')
-                root.wallpaperList = lines
-                console.log("Found", lines.length, "wallpapers:")
-                for (let i = 0; i < Math.min(5, lines.length); i++) {
-                    console.log("  -", lines[i])
+                if (lines.length > 0) {
+                    root.wallpaperList = lines
                 }
                 root.wallpaperBuffer = ""
             }
@@ -392,11 +458,6 @@ ShellRoot {
         id: swwwSetWallpaperProcess
         property string wallpaperPath: ""
         command: ["swww", "img", wallpaperPath, "--transition-type", "fade", "--transition-duration", "2"]
-        onRunningChanged: {
-            if (!running) {
-                console.log("Wallpaper set to:", wallpaperPath)
-            }
-        }
     }
 
     Component.onCompleted: {
@@ -406,15 +467,7 @@ ShellRoot {
         batteryStatusProcess.running = true
         brightnessProcess.running = true
         wallpaperScanProcess.running = true
-    }
-
-    // Timer для скрытия Dynamic Island
-    Timer {
-        id: hideIslandTimer
-        interval: 300
-        onTriggered: {
-            root.showDynamicIsland = false
-        }
+        playerListProcess.running = true
     }
 
     Variants {
@@ -444,8 +497,14 @@ ShellRoot {
                     height: 530
                     
                     color: "transparent"
-                    focusable: false
+                    focusable: true
                     exclusionMode: ExclusionMode.Ignore
+                    
+                    Item {
+                        anchors.fill: parent
+                        focus: true
+                        Keys.onEscapePressed: root.closeIsland()
+                    }
                     
                     Rectangle {
                         id: islandBackground
@@ -453,28 +512,17 @@ ShellRoot {
                         color: root.colorBgPrimary
                         radius: 15
                         
-                        // Основная MouseArea для отслеживания hover на всем окне
-                        MouseArea {
-                            id: islandMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            propagateComposedEvents: true
-                            
-                            onEntered: {
-                                hideIslandTimer.stop()
-                                root.showDynamicIsland = true
-                            }
-                            
-                            onExited: {
-                                hideIslandTimer.restart()
-                            }
-                            
-                            onPressed: mouse => {
-                                mouse.accepted = false  // Пропускаем клики дальше
-                            }
-                            
-                            onWheel: wheel => {
-                                wheel.accepted = false  // Пропускаем скролл дальше
+                        // Hover tracking
+                        HoverHandler {
+                            id: islandHoverHandler
+                            onHoveredChanged: {
+                                if (hovered) {
+                                    root.isMouseOverIsland = true
+                                    hideIslandTimer.stop()
+                                } else {
+                                    root.isMouseOverIsland = false
+                                    hideIslandTimer.restart()
+                                }
                             }
                         }
                         
@@ -485,6 +533,7 @@ ShellRoot {
                             
                             // Tab selector
                             Row {
+                                id: tabRow
                                 width: parent.width
                                 height: 40
                                 spacing: 10
@@ -495,24 +544,29 @@ ShellRoot {
                                     model: ["Dashboard", "Wallpapers", "Network"]
                                     
                                     Rectangle {
-                                        width: (parent.width - 20) / 3
+                                        width: (tabRow.width - 20) / 3
                                         height: 40
                                         radius: 8
-                                        color: parent.currentTab === index ? root.colorBgWorkspaceActive : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                        color: tabRow.currentTab === index ? root.colorBgWorkspaceActive : 
+                                               tabMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.15) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                        
+                                        Behavior on color { ColorAnimation { duration: 150 } }
                                         
                                         Text {
                                             anchors.centerIn: parent
                                             text: modelData
-                                            color: parent.parent.currentTab === index ? root.colorTextWorkspaceActive : root.colorTextSecondary
+                                            color: tabRow.currentTab === index ? root.colorTextWorkspaceActive : root.colorTextSecondary
                                             font.family: "JetBrainsMono Nerd Font"
                                             font.pixelSize: 14
                                             font.weight: Font.Bold
                                         }
                                         
                                         MouseArea {
+                                            id: tabMouse
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            onClicked: parent.parent.currentTab = index
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: tabRow.currentTab = index
                                         }
                                     }
                                 }
@@ -526,7 +580,7 @@ ShellRoot {
                                 // ===== DASHBOARD TAB =====
                                 Item {
                                     anchors.fill: parent
-                                    visible: parent.parent.children[0].currentTab === 0
+                                    visible: tabRow.currentTab === 0
                                     
                                     Column {
                                         anchors.fill: parent
@@ -557,7 +611,7 @@ ShellRoot {
                                                         source: root.musicArtUrl
                                                         fillMode: Image.PreserveAspectCrop
                                                         asynchronous: true
-                                                        visible: root.musicArtUrl !== ""
+                                                        visible: status === Image.Ready
                                                     }
                                                     
                                                     Text {
@@ -567,7 +621,7 @@ ShellRoot {
                                                         font.pixelSize: 30
                                                         color: root.colorTextSecondary
                                                         opacity: 0.3
-                                                        visible: root.musicArtUrl === ""
+                                                        visible: root.musicArtUrl === "" || parent.children[0].status !== Image.Ready
                                                     }
                                                 }
                                                 
@@ -596,6 +650,16 @@ ShellRoot {
                                                         elide: Text.ElideRight
                                                         width: parent.width
                                                     }
+                                                    
+                                                    Text {
+                                                        text: root.activePlayer ? "♪ " + root.activePlayer : ""
+                                                        color: root.colorTextSecondary
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 10
+                                                        opacity: 0.5
+                                                        elide: Text.ElideRight
+                                                        width: parent.width
+                                                    }
                                                 }
                                                 
                                                 // Controls
@@ -605,7 +669,6 @@ ShellRoot {
                                                     
                                                     Row {
                                                         anchors.centerIn: parent
-                                                        anchors.rightMargin: 10
                                                         spacing: 10
                                                         
                                                         // Previous
@@ -613,7 +676,9 @@ ShellRoot {
                                                             width: 35
                                                             height: 35
                                                             radius: 17.5
-                                                            color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                            color: prevMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.2) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                            
+                                                            Behavior on color { ColorAnimation { duration: 150 } }
                                                             
                                                             Text {
                                                                 anchors.centerIn: parent
@@ -624,9 +689,11 @@ ShellRoot {
                                                             }
                                                             
                                                             MouseArea {
+                                                                id: prevMouse
                                                                 anchors.fill: parent
                                                                 hoverEnabled: true
-                                                                onClicked: playerctlPreviousProcess.running = true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: playerPreviousProcess.running = true
                                                             }
                                                         }
                                                         
@@ -635,7 +702,9 @@ ShellRoot {
                                                             width: 40
                                                             height: 40
                                                             radius: 20
-                                                            color: root.colorBgWorkspaceActive
+                                                            color: playPauseMouse.containsMouse ? Qt.lighter(root.colorBgWorkspaceActive, 1.1) : root.colorBgWorkspaceActive
+                                                            
+                                                            Behavior on color { ColorAnimation { duration: 150 } }
                                                             
                                                             Text {
                                                                 anchors.centerIn: parent
@@ -646,9 +715,11 @@ ShellRoot {
                                                             }
                                                             
                                                             MouseArea {
+                                                                id: playPauseMouse
                                                                 anchors.fill: parent
                                                                 hoverEnabled: true
-                                                                onClicked: playerctlPlayPauseProcess.running = true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: playerPlayPauseProcess.running = true
                                                             }
                                                         }
                                                         
@@ -657,7 +728,9 @@ ShellRoot {
                                                             width: 35
                                                             height: 35
                                                             radius: 17.5
-                                                            color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                            color: nextMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.2) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                            
+                                                            Behavior on color { ColorAnimation { duration: 150 } }
                                                             
                                                             Text {
                                                                 anchors.centerIn: parent
@@ -668,9 +741,11 @@ ShellRoot {
                                                             }
                                                             
                                                             MouseArea {
+                                                                id: nextMouse
                                                                 anchors.fill: parent
                                                                 hoverEnabled: true
-                                                                onClicked: playerctlNextProcess.running = true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: playerNextProcess.running = true
                                                             }
                                                         }
                                                     }
@@ -814,6 +889,7 @@ ShellRoot {
                                             Row {
                                                 width: parent.width
                                                 spacing: 15
+                                                height: 30
                                                 
                                                 Text {
                                                     text: "\uf185"
@@ -821,60 +897,78 @@ ShellRoot {
                                                     font.pixelSize: 16
                                                     color: root.colorTextSecondary
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    width: 20
                                                 }
                                                 
-                                                Slider {
-                                                    id: brightnessSlider
-                                                    width: parent.width - 80
-                                                    from: 0
-                                                    to: 100
-                                                    value: root.brightness
+                                                Item {
+                                                    width: parent.width - 85
+                                                    height: 30
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                     
-                                                    onValueChanged: {
-                                                        if (pressed) {
-                                                            root.brightnessUserChanging = true
-                                                            brightnessChangeProcess.targetBrightness = Math.round(value)
-                                                            brightnessChangeProcess.running = true
-                                                        }
-                                                    }
-                                                    
-                                                    onPressedChanged: {
-                                                        if (!pressed) {
-                                                            root.brightnessUserChanging = false
-                                                        }
-                                                    }
-                                                    
-                                                    background: Rectangle {
-                                                        width: brightnessSlider.width
+                                                    Rectangle {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width
                                                         height: 6
                                                         color: Qt.rgba(220/255, 215/255, 186/255, 0.2)
                                                         radius: 3
                                                         
                                                         Rectangle {
-                                                            width: brightnessSlider.visualPosition * parent.width
+                                                            width: (root.brightness / 100) * parent.width
                                                             height: parent.height
                                                             color: root.colorBgWorkspaceActive
                                                             radius: 3
                                                         }
                                                     }
                                                     
-                                                    handle: Rectangle {
-                                                        x: brightnessSlider.visualPosition * (brightnessSlider.width - width)
-                                                        y: (brightnessSlider.height - height) / 2
+                                                    Rectangle {
+                                                        id: brightnessHandle
+                                                        x: (root.brightness / 100) * (parent.width - width)
+                                                        y: (parent.height - height) / 2
                                                         width: 18
                                                         height: 18
                                                         radius: 9
                                                         color: root.colorBgWorkspaceActive
+                                                        
+                                                        Behavior on x { 
+                                                            enabled: !brightnessMouseArea.pressed
+                                                            NumberAnimation { duration: 100 } 
+                                                        }
+                                                    }
+                                                    
+                                                    MouseArea {
+                                                        id: brightnessMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        
+                                                        onPressed: {
+                                                            root.brightnessUserChanging = true
+                                                            updateBrightness(mouse.x)
+                                                        }
+                                                        onPositionChanged: {
+                                                            if (pressed) updateBrightness(mouse.x)
+                                                        }
+                                                        onReleased: {
+                                                            root.brightnessUserChanging = false
+                                                        }
+                                                        
+                                                        function updateBrightness(mouseX) {
+                                                            let val = Math.max(0, Math.min(100, (mouseX / width) * 100))
+                                                            root.brightness = Math.round(val)
+                                                            brightnessChangeProcess.targetBrightness = root.brightness
+                                                            brightnessChangeProcess.running = true
+                                                        }
                                                     }
                                                 }
                                                 
                                                 Text {
-                                                    text: Math.round(brightnessSlider.value) + "%"
+                                                    text: root.brightness + "%"
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 13
                                                     color: root.colorTextSecondary
                                                     width: 45
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    horizontalAlignment: Text.AlignRight
                                                 }
                                             }
                                             
@@ -882,6 +976,7 @@ ShellRoot {
                                             Row {
                                                 width: parent.width
                                                 spacing: 15
+                                                height: 30
                                                 
                                                 Text {
                                                     text: "\uf028"
@@ -889,60 +984,77 @@ ShellRoot {
                                                     font.pixelSize: 16
                                                     color: root.colorTextSecondary
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    width: 20
                                                 }
                                                 
-                                                Slider {
-                                                    id: volumeSlider
-                                                    width: parent.width - 80
-                                                    from: 0
-                                                    to: 100
-                                                    value: root.volume
+                                                Item {
+                                                    width: parent.width - 85
+                                                    height: 30
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                     
-                                                    onValueChanged: {
-                                                        if (pressed) {
-                                                            root.volumeUserChanging = true
-                                                            volumeChangeProcess.targetVolume = Math.round(value)
-                                                            volumeChangeProcess.running = true
-                                                        }
-                                                    }
-                                                    
-                                                    onPressedChanged: {
-                                                        if (!pressed) {
-                                                            root.volumeUserChanging = false
-                                                        }
-                                                    }
-                                                    
-                                                    background: Rectangle {
-                                                        width: volumeSlider.width
+                                                    Rectangle {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width
                                                         height: 6
                                                         color: Qt.rgba(220/255, 215/255, 186/255, 0.2)
                                                         radius: 3
                                                         
                                                         Rectangle {
-                                                            width: volumeSlider.visualPosition * parent.width
+                                                            width: (root.volume / 100) * parent.width
                                                             height: parent.height
                                                             color: root.colorBgWorkspaceActive
                                                             radius: 3
                                                         }
                                                     }
                                                     
-                                                    handle: Rectangle {
-                                                        x: volumeSlider.visualPosition * (volumeSlider.width - width)
-                                                        y: (volumeSlider.height - height) / 2
+                                                    Rectangle {
+                                                        x: (root.volume / 100) * (parent.width - width)
+                                                        y: (parent.height - height) / 2
                                                         width: 18
                                                         height: 18
                                                         radius: 9
                                                         color: root.colorBgWorkspaceActive
+                                                        
+                                                        Behavior on x { 
+                                                            enabled: !volumeMouseArea.pressed
+                                                            NumberAnimation { duration: 100 } 
+                                                        }
+                                                    }
+                                                    
+                                                    MouseArea {
+                                                        id: volumeMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        
+                                                        onPressed: {
+                                                            root.volumeUserChanging = true
+                                                            updateVolume(mouse.x)
+                                                        }
+                                                        onPositionChanged: {
+                                                            if (pressed) updateVolume(mouse.x)
+                                                        }
+                                                        onReleased: {
+                                                            root.volumeUserChanging = false
+                                                        }
+                                                        
+                                                        function updateVolume(mouseX) {
+                                                            let val = Math.max(0, Math.min(100, (mouseX / width) * 100))
+                                                            root.volume = Math.round(val)
+                                                            volumeChangeProcess.targetVolume = root.volume
+                                                            volumeChangeProcess.running = true
+                                                        }
                                                     }
                                                 }
                                                 
                                                 Text {
-                                                    text: Math.round(volumeSlider.value) + "%"
+                                                    text: root.volume + "%"
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 13
                                                     color: root.colorTextSecondary
                                                     width: 45
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    horizontalAlignment: Text.AlignRight
                                                 }
                                             }
                                             
@@ -950,6 +1062,7 @@ ShellRoot {
                                             Row {
                                                 width: parent.width
                                                 spacing: 15
+                                                height: 30
                                                 
                                                 Text {
                                                     text: "\uf130"
@@ -957,60 +1070,77 @@ ShellRoot {
                                                     font.pixelSize: 16
                                                     color: root.colorTextSecondary
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    width: 20
                                                 }
                                                 
-                                                Slider {
-                                                    id: micSlider
-                                                    width: parent.width - 80
-                                                    from: 0
-                                                    to: 100
-                                                    value: root.micVolume
+                                                Item {
+                                                    width: parent.width - 85
+                                                    height: 30
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                     
-                                                    onValueChanged: {
-                                                        if (pressed) {
-                                                            root.micUserChanging = true
-                                                            micChangeProcess.targetVolume = Math.round(value)
-                                                            micChangeProcess.running = true
-                                                        }
-                                                    }
-                                                    
-                                                    onPressedChanged: {
-                                                        if (!pressed) {
-                                                            root.micUserChanging = false
-                                                        }
-                                                    }
-                                                    
-                                                    background: Rectangle {
-                                                        width: micSlider.width
+                                                    Rectangle {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width
                                                         height: 6
                                                         color: Qt.rgba(220/255, 215/255, 186/255, 0.2)
                                                         radius: 3
                                                         
                                                         Rectangle {
-                                                            width: micSlider.visualPosition * parent.width
+                                                            width: (root.micVolume / 100) * parent.width
                                                             height: parent.height
                                                             color: root.colorBgWorkspaceActive
                                                             radius: 3
                                                         }
                                                     }
                                                     
-                                                    handle: Rectangle {
-                                                        x: micSlider.visualPosition * (micSlider.width - width)
-                                                        y: (micSlider.height - height) / 2
+                                                    Rectangle {
+                                                        x: (root.micVolume / 100) * (parent.width - width)
+                                                        y: (parent.height - height) / 2
                                                         width: 18
                                                         height: 18
                                                         radius: 9
                                                         color: root.colorBgWorkspaceActive
+                                                        
+                                                        Behavior on x { 
+                                                            enabled: !micMouseArea.pressed
+                                                            NumberAnimation { duration: 100 } 
+                                                        }
+                                                    }
+                                                    
+                                                    MouseArea {
+                                                        id: micMouseArea
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        
+                                                        onPressed: {
+                                                            root.micUserChanging = true
+                                                            updateMic(mouse.x)
+                                                        }
+                                                        onPositionChanged: {
+                                                            if (pressed) updateMic(mouse.x)
+                                                        }
+                                                        onReleased: {
+                                                            root.micUserChanging = false
+                                                        }
+                                                        
+                                                        function updateMic(mouseX) {
+                                                            let val = Math.max(0, Math.min(100, (mouseX / width) * 100))
+                                                            root.micVolume = Math.round(val)
+                                                            micChangeProcess.targetVolume = root.micVolume
+                                                            micChangeProcess.running = true
+                                                        }
                                                     }
                                                 }
                                                 
                                                 Text {
-                                                    text: Math.round(micSlider.value) + "%"
+                                                    text: root.micVolume + "%"
                                                     font.family: "JetBrainsMono Nerd Font"
                                                     font.pixelSize: 13
                                                     color: root.colorTextSecondary
                                                     width: 45
                                                     anchors.verticalCenter: parent.verticalCenter
+                                                    horizontalAlignment: Text.AlignRight
                                                 }
                                             }
                                         }
@@ -1043,7 +1173,9 @@ ShellRoot {
                                                         width: 80
                                                         height: 24
                                                         radius: 5
-                                                        color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        color: clearAllMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.2) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
                                                         
                                                         Text {
                                                             anchors.centerIn: parent
@@ -1054,8 +1186,10 @@ ShellRoot {
                                                         }
                                                         
                                                         MouseArea {
+                                                            id: clearAllMouse
                                                             anchors.fill: parent
                                                             hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
                                                             onClicked: root.notifications = []
                                                         }
                                                     }
@@ -1114,7 +1248,9 @@ ShellRoot {
                                                                     
                                                                     MouseArea {
                                                                         anchors.fill: parent
+                                                                        anchors.margins: -5
                                                                         hoverEnabled: true
+                                                                        cursorShape: Qt.PointingHandCursor
                                                                         onClicked: {
                                                                             let newNotifs = []
                                                                             for (let i = 0; i < root.notifications.length; i++) {
@@ -1138,161 +1274,255 @@ ShellRoot {
                                 // ===== WALLPAPERS TAB =====
                                 Item {
                                     anchors.fill: parent
-                                    visible: parent.parent.children[0].currentTab === 1
+                                    visible: tabRow.currentTab === 1
                                     
                                     Column {
                                         anchors.fill: parent
-                                        spacing: 20
+                                        spacing: 15
                                         
-                                        // Carousel
+                                        // Carousel Container
                                         Item {
+                                            id: carouselContainer
                                             width: parent.width
-                                            height: 330
+                                            height: 340
+                                            clip: true
                                             
-                                            // Center Preview
+                                            property real centerX: width / 2
+                                            property real centerY: height / 2
+                                            
+                                            // Размеры
+                                            property real bigW: 500
+                                            property real bigH: 300
+                                            property real smallW: 150
+                                            property real smallH: 100
+                                            property real sideOffset: 30
+                                            
+                                            // Scroll на всём контейнере
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                z: -1
+                                                onWheel: wheel => {
+                                                    if (wheel.angleDelta.y > 0) {
+                                                        root.goToPrevWallpaper()
+                                                    } else {
+                                                        root.goToNextWallpaper()
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // ===== ЛЕВОЕ ПРЕВЬЮ =====
                                             Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 500
-                                                height: 300
+                                                id: leftPreview
+                                                
+                                                property real targetW: root.isAnimating && root.slideDirection === -1 
+                                                    ? (carouselContainer.smallW + (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress)
+                                                    : carouselContainer.smallW
+                                                property real targetH: root.isAnimating && root.slideDirection === -1 
+                                                    ? (carouselContainer.smallH + (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress)
+                                                    : carouselContainer.smallH
+                                                property real targetX: root.isAnimating && root.slideDirection === -1 
+                                                    ? (carouselContainer.sideOffset + (carouselContainer.centerX - carouselContainer.bigW/2 - carouselContainer.sideOffset) * root.animProgress)
+                                                    : carouselContainer.sideOffset
+                                                
+                                                width: targetW
+                                                height: targetH
+                                                x: targetX
+                                                y: carouselContainer.centerY - height/2
+                                                
                                                 color: Qt.rgba(220/255, 215/255, 186/255, 0.05)
-                                                radius: 12
+                                                radius: root.isAnimating && root.slideDirection === -1 ? (8 + 4 * root.animProgress) : 8
                                                 clip: true
+                                                visible: root.wallpaperList.length > 1
+                                                z: root.isAnimating && root.slideDirection === -1 ? 10 : 1
+                                                
+                                                opacity: leftMouse.containsMouse ? 1.0 : 
+                                                    (root.isAnimating && root.slideDirection === -1 ? (0.6 + 0.4 * root.animProgress) : 0.6)
+                                                scale: leftMouse.containsMouse && !root.isAnimating ? 1.05 : 1.0
+                                                
+                                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                                Behavior on scale { NumberAnimation { duration: 150 } }
+                                                
+                                                Image {
+                                                    anchors.fill: parent
+                                                    source: {
+                                                        if (root.wallpaperList.length <= 1) return ""
+                                                        let idx = (root.currentWallpaperIndex - 1 + root.wallpaperList.length) % root.wallpaperList.length
+                                                        return "file://" + root.wallpaperList[idx]
+                                                    }
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    asynchronous: true
+                                                    cache: true
+                                                }
+                                                
+                                                MouseArea {
+                                                    id: leftMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.goToPrevWallpaper()
+                                                }
+                                            }
+                                            
+                                            // ===== ЦЕНТРАЛЬНОЕ ИЗОБРАЖЕНИЕ =====
+                                            Rectangle {
+                                                id: centerWallpaper
+                                                
+                                                property real targetW: root.isAnimating 
+                                                    ? (carouselContainer.bigW - (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress)
+                                                    : carouselContainer.bigW
+                                                property real targetH: root.isAnimating 
+                                                    ? (carouselContainer.bigH - (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress)
+                                                    : carouselContainer.bigH
+                                                property real targetX: root.isAnimating 
+                                                    ? (root.slideDirection === 1 
+                                                        ? (carouselContainer.centerX - carouselContainer.bigW/2 + (carouselContainer.sideOffset - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress)
+                                                        : (carouselContainer.centerX - carouselContainer.bigW/2 + (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress))
+                                                    : (carouselContainer.centerX - carouselContainer.bigW/2)
+                                                
+                                                width: targetW
+                                                height: targetH
+                                                x: targetX
+                                                y: carouselContainer.centerY - height/2
+                                                
+                                                color: Qt.rgba(220/255, 215/255, 186/255, 0.05)
+                                                radius: root.isAnimating ? (12 - 4 * root.animProgress) : 12
+                                                clip: true
+                                                z: root.isAnimating ? 1 : 10
+                                                
+                                                opacity: root.isAnimating ? (1.0 - 0.4 * root.animProgress) : 1.0
                                                 
                                                 Image {
                                                     anchors.fill: parent
                                                     source: root.wallpaperList.length > 0 ? ("file://" + root.wallpaperList[root.currentWallpaperIndex]) : ""
                                                     fillMode: Image.PreserveAspectCrop
                                                     asynchronous: true
-                                                    
-                                                    onStatusChanged: {
-                                                        if (status === Image.Ready) {
-                                                            console.log("Image loaded:", source)
-                                                        } else if (status === Image.Error) {
-                                                            console.log("Image error:", source)
-                                                        }
-                                                    }
+                                                    cache: true
                                                 }
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: root.wallpaperList.length === 0 ? "No wallpapers found" : "Loading..."
+                                                    text: "No wallpapers found\n\nAdd images to:\n~/Pictures/Wallpapers"
                                                     color: root.colorTextSecondary
                                                     font.family: "JetBrainsMono Nerd Font"
-                                                    font.pixelSize: 16
+                                                    font.pixelSize: 14
                                                     opacity: 0.5
-                                                    visible: parent.children[0].status !== Image.Ready
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    visible: root.wallpaperList.length === 0 && !root.isAnimating
                                                 }
                                             }
                                             
-                                            // Left Preview
+                                            // ===== ПРАВОЕ ПРЕВЬЮ =====
                                             Rectangle {
-                                                anchors.right: parent.horizontalCenter
-                                                anchors.rightMargin: 270
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: 150
-                                                height: 100
+                                                id: rightPreview
+                                                
+                                                property real targetW: root.isAnimating && root.slideDirection === 1 
+                                                    ? (carouselContainer.smallW + (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress)
+                                                    : carouselContainer.smallW
+                                                property real targetH: root.isAnimating && root.slideDirection === 1 
+                                                    ? (carouselContainer.smallH + (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress)
+                                                    : carouselContainer.smallH
+                                                property real targetX: root.isAnimating && root.slideDirection === 1 
+                                                    ? (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress)
+                                                    : (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW)
+                                                
+                                                width: targetW
+                                                height: targetH
+                                                x: targetX
+                                                y: carouselContainer.centerY - height/2
+                                                
                                                 color: Qt.rgba(220/255, 215/255, 186/255, 0.05)
-                                                radius: 8
-                                                opacity: 0.5
+                                                radius: root.isAnimating && root.slideDirection === 1 ? (8 + 4 * root.animProgress) : 8
                                                 clip: true
                                                 visible: root.wallpaperList.length > 1
+                                                z: root.isAnimating && root.slideDirection === 1 ? 10 : 1
+                                                
+                                                opacity: rightMouse.containsMouse ? 1.0 : 
+                                                    (root.isAnimating && root.slideDirection === 1 ? (0.6 + 0.4 * root.animProgress) : 0.6)
+                                                scale: rightMouse.containsMouse && !root.isAnimating ? 1.05 : 1.0
+                                                
+                                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                                Behavior on scale { NumberAnimation { duration: 150 } }
                                                 
                                                 Image {
                                                     anchors.fill: parent
                                                     source: {
                                                         if (root.wallpaperList.length <= 1) return ""
-                                                        let prevIndex = root.currentWallpaperIndex - 1
-                                                        if (prevIndex < 0) prevIndex = root.wallpaperList.length - 1
-                                                        return "file://" + root.wallpaperList[prevIndex]
+                                                        let idx = (root.currentWallpaperIndex + 1) % root.wallpaperList.length
+                                                        return "file://" + root.wallpaperList[idx]
                                                     }
                                                     fillMode: Image.PreserveAspectCrop
                                                     asynchronous: true
+                                                    cache: true
                                                 }
-                                            }
-                                            
-                                            // Right Preview
-                                            Rectangle {
-                                                anchors.left: parent.horizontalCenter
-                                                anchors.leftMargin: 270
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: 150
-                                                height: 100
-                                                color: Qt.rgba(220/255, 215/255, 186/255, 0.05)
-                                                radius: 8
-                                                opacity: 0.5
-                                                clip: true
-                                                visible: root.wallpaperList.length > 1
                                                 
-                                                Image {
+                                                MouseArea {
+                                                    id: rightMouse
                                                     anchors.fill: parent
-                                                    source: {
-                                                        if (root.wallpaperList.length <= 1) return ""
-                                                        let nextIndex = root.currentWallpaperIndex + 1
-                                                        if (nextIndex >= root.wallpaperList.length) nextIndex = 0
-                                                        return "file://" + root.wallpaperList[nextIndex]
-                                                    }
-                                                    fillMode: Image.PreserveAspectCrop
-                                                    asynchronous: true
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.goToNextWallpaper()
                                                 }
                                             }
                                             
-                                            // Left Arrow
+                                            // ===== ЛЕВАЯ СТРЕЛКА =====
                                             Rectangle {
                                                 anchors.left: parent.left
-                                                anchors.leftMargin: 20
+                                                anchors.leftMargin: 190
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: 50
-                                                height: 50
-                                                radius: 25
-                                                color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                width: 40
+                                                height: 40
+                                                radius: 20
+                                                color: leftArrowMouse.containsMouse ? Qt.rgba(255, 255, 255, 0.25) : Qt.rgba(220/255, 215/255, 186/255, 0.15)
                                                 visible: root.wallpaperList.length > 1
+                                                z: 20
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: "\uf053"
                                                     font.family: "JetBrainsMono Nerd Font"
-                                                    font.pixelSize: 20
+                                                    font.pixelSize: 16
                                                     color: root.colorTextSecondary
                                                 }
                                                 
                                                 MouseArea {
+                                                    id: leftArrowMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
-                                                    onClicked: {
-                                                        if (root.wallpaperList.length > 0) {
-                                                            root.currentWallpaperIndex = (root.currentWallpaperIndex - 1 + root.wallpaperList.length) % root.wallpaperList.length
-                                                        }
-                                                    }
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.goToPrevWallpaper()
                                                 }
                                             }
                                             
-                                            // Right Arrow
+                                            // ===== ПРАВАЯ СТРЕЛКА =====
                                             Rectangle {
                                                 anchors.right: parent.right
-                                                anchors.rightMargin: 20
+                                                anchors.rightMargin: 190
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: 50
-                                                height: 50
-                                                radius: 25
-                                                color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                width: 40
+                                                height: 40
+                                                radius: 20
+                                                color: rightArrowMouse.containsMouse ? Qt.rgba(255, 255, 255, 0.25) : Qt.rgba(220/255, 215/255, 186/255, 0.15)
                                                 visible: root.wallpaperList.length > 1
+                                                z: 20
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: "\uf054"
                                                     font.family: "JetBrainsMono Nerd Font"
-                                                    font.pixelSize: 20
+                                                    font.pixelSize: 16
                                                     color: root.colorTextSecondary
                                                 }
                                                 
                                                 MouseArea {
+                                                    id: rightArrowMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
-                                                    onClicked: {
-                                                        if (root.wallpaperList.length > 0) {
-                                                            root.currentWallpaperIndex = (root.currentWallpaperIndex + 1) % root.wallpaperList.length
-                                                        }
-                                                    }
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.goToNextWallpaper()
                                                 }
                                             }
                                         }
@@ -1300,7 +1530,7 @@ ShellRoot {
                                         // Counter and Button
                                         Column {
                                             width: parent.width
-                                            spacing: 15
+                                            spacing: 12
                                             
                                             Text {
                                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -1316,7 +1546,9 @@ ShellRoot {
                                                 width: 200
                                                 height: 45
                                                 radius: 10
-                                                color: root.colorBgWorkspaceActive
+                                                color: setWallpaperMouse.containsMouse ? Qt.lighter(root.colorBgWorkspaceActive, 1.1) : root.colorBgWorkspaceActive
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
@@ -1328,13 +1560,14 @@ ShellRoot {
                                                 }
                                                 
                                                 MouseArea {
+                                                    id: setWallpaperMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
                                                     onClicked: {
                                                         if (root.wallpaperList.length > 0) {
                                                             swwwSetWallpaperProcess.wallpaperPath = root.wallpaperList[root.currentWallpaperIndex]
                                                             swwwSetWallpaperProcess.running = true
-                                                            console.log("Setting wallpaper:", root.wallpaperList[root.currentWallpaperIndex])
                                                         }
                                                     }
                                                 }
@@ -1346,7 +1579,7 @@ ShellRoot {
                                 // ===== NETWORK TAB =====
                                 Item {
                                     anchors.fill: parent
-                                    visible: parent.parent.children[0].currentTab === 2
+                                    visible: tabRow.currentTab === 2
                                     
                                     Column {
                                         anchors.fill: parent
@@ -1365,7 +1598,10 @@ ShellRoot {
                                                     width: (parent.width - 10) / 2
                                                     height: 35
                                                     radius: 8
-                                                    color: root.currentNetworkTab === index ? root.colorBgWorkspaceActive : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                    color: root.currentNetworkTab === index ? root.colorBgWorkspaceActive : 
+                                                           netTabMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.15) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                    
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
                                                     
                                                     Text {
                                                         anchors.centerIn: parent
@@ -1377,8 +1613,10 @@ ShellRoot {
                                                     }
                                                     
                                                     MouseArea {
+                                                        id: netTabMouse
                                                         anchors.fill: parent
                                                         hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
                                                         onClicked: root.currentNetworkTab = index
                                                     }
                                                 }
@@ -1413,7 +1651,9 @@ ShellRoot {
                                                         width: 100
                                                         height: 30
                                                         radius: 6
-                                                        color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        color: wifiScanMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.2) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
                                                         
                                                         Text {
                                                             anchors.centerIn: parent
@@ -1424,8 +1664,10 @@ ShellRoot {
                                                         }
                                                         
                                                         MouseArea {
+                                                            id: wifiScanMouse
                                                             anchors.fill: parent
                                                             hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
                                                             onClicked: console.log("Scanning WiFi...")
                                                         }
                                                     }
@@ -1498,6 +1740,7 @@ ShellRoot {
                                                                     MouseArea {
                                                                         anchors.fill: parent
                                                                         hoverEnabled: true
+                                                                        cursorShape: Qt.PointingHandCursor
                                                                         onClicked: console.log("Connect to", modelData.ssid)
                                                                     }
                                                                 }
@@ -1536,7 +1779,9 @@ ShellRoot {
                                                         width: 100
                                                         height: 30
                                                         radius: 6
-                                                        color: Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        color: btScanMouse.containsMouse ? Qt.rgba(220/255, 215/255, 186/255, 0.2) : Qt.rgba(220/255, 215/255, 186/255, 0.1)
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
                                                         
                                                         Text {
                                                             anchors.centerIn: parent
@@ -1547,8 +1792,10 @@ ShellRoot {
                                                         }
                                                         
                                                         MouseArea {
+                                                            id: btScanMouse
                                                             anchors.fill: parent
                                                             hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
                                                             onClicked: console.log("Scanning Bluetooth...")
                                                         }
                                                     }
@@ -1581,7 +1828,7 @@ ShellRoot {
                                                                 }
                                                                 
                                                                 Column {
-                                                                    width: parent.width - 190
+                                                                    width: parent.width - 150
                                                                     spacing: 3
                                                                     anchors.verticalCenter: parent.verticalCenter
                                                                     
@@ -1621,6 +1868,7 @@ ShellRoot {
                                                                     MouseArea {
                                                                         anchors.fill: parent
                                                                         hoverEnabled: true
+                                                                        cursorShape: Qt.PointingHandCursor
                                                                         onClicked: console.log("Connect to", modelData.name)
                                                                     }
                                                                 }
@@ -1717,6 +1965,7 @@ ShellRoot {
                                                 id: wsMouseArea
                                                 anchors.fill: parent
                                                 hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
                                                 onClicked: Hyprland.dispatch("workspace " + wsButton.wsNumber)
                                             }
                                         }
@@ -1725,7 +1974,7 @@ ShellRoot {
                             }
                         }
 
-                        // CENTER - часы с hover эффектом
+                        // CENTER - часы (ИСПРАВЛЕН ЦВЕТ)
                         Rectangle {
                             id: centerClock
                             anchors.centerIn: parent
@@ -1742,14 +1991,14 @@ ShellRoot {
                                 Text {
                                     id: clockDate
                                     text: Qt.formatDateTime(new Date(), "ddd dd MMM yyyy")
-                                    color: root.colorTextSecondary
+                                    color: root.colorTextSecondary  // Правильный цвет
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
                                 
                                 Text {
                                     text: "\uf017"
-                                    color: root.colorTextSecondary
+                                    color: root.colorTextSecondary  // Правильный цвет
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
@@ -1757,7 +2006,7 @@ ShellRoot {
                                 Text {
                                     id: clockTime
                                     text: Qt.formatDateTime(new Date(), "HH:mm")
-                                    color: root.colorTextSecondary
+                                    color: root.colorTextSecondary  // Правильный цвет
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
@@ -1774,29 +2023,25 @@ ShellRoot {
                                 }
                             }
 
-                            MouseArea {
-                                id: clockMouseArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                
-                                onEntered: {
-                                    hideIslandTimer.stop()
-                                    root.showDynamicIsland = true
-                                }
-                                
-                                onExited: {
-                                    // Запускаем таймер скрытия с задержкой
-                                    hideIslandTimer.restart()
-                                }
-                                
-                                onClicked: {
-                                    swancProcess.running = true
+                            HoverHandler {
+                                id: clockHoverHandler
+                                onHoveredChanged: {
+                                    if (hovered) {
+                                        root.isMouseOverIsland = true
+                                        root.openIsland()
+                                    } else {
+                                        root.isMouseOverIsland = false
+                                        hideIslandTimer.restart()
+                                    }
                                 }
                             }
-
-                            Process {
-                                id: swancProcess
-                                command: ["swaync-client", "-t", "-sw"]
+                            
+                            TapHandler {
+                                onTapped: {
+                                    if (root.showDynamicIsland) {
+                                        root.closeIsland()
+                                    }
+                                }
                             }
                         }
 
@@ -1989,6 +2234,7 @@ ShellRoot {
                                     id: networkMouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
                                     onClicked: nmProcess.running = true
                                 }
 
