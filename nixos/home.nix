@@ -6,9 +6,10 @@
 		onlyoffice-desktopeditors
 		yandex-music
 		scrcpy
-		adbfs-rootless
 		android-tools
-	        adwsteamgtk
+	    adwsteamgtk
+		virt-manager
+		qemu
 	];
 	home.pointerCursor = {
 		gtk.enable = true;
