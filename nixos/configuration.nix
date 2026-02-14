@@ -7,7 +7,6 @@
       ./hardware-configuration.nix
       ./modules/nixvim.nix
       ./modules/hyprland.nix
-      ./modules/zsh.nix
     ];
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
