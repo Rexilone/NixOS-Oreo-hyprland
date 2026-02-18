@@ -9,23 +9,19 @@ import QtQuick.Controls
 ShellRoot {
     id: root
 
-    // ===== ЦВЕТА (readonly для оптимизации) =====
+    // ===== ЦВЕТОВАЯ ПАЛИТРА =====
     readonly property color colorBgPrimary: "#151515"
     readonly property color colorBgSecondary: "transparent"
-    readonly property color colorBgWorkspaceActive: "#fff0f5"
-    readonly property color colorBgWorkspaceHover: Qt.rgba(0, 0, 0, 0.2)
+    readonly property color colorBgCard: "#1e1e1e"
+    readonly property color colorBgCardHover: "#252525"
+    readonly property color colorAccent: "#fff0f5"
+    readonly property color colorAccentHover: "#ffffff"
     readonly property color colorTextPrimary: "#ffffff"
     readonly property color colorTextSecondary: "#dcd7ba"
-    readonly property color colorTextWorkspaceActive: "#000000"
-    
-    // Кэшированные цвета для частого использования
-    readonly property color colorCardBg: Qt.rgba(0.863, 0.843, 0.729, 0.05)
-    readonly property color colorCardBgHover: Qt.rgba(0.863, 0.843, 0.729, 0.08)
-    readonly property color colorButtonBg: Qt.rgba(0.863, 0.843, 0.729, 0.1)
-    readonly property color colorButtonBgHover: Qt.rgba(0.863, 0.843, 0.729, 0.2)
-    readonly property color colorSliderBg: Qt.rgba(0.863, 0.843, 0.729, 0.2)
+    readonly property color colorTextDim: "#7c6f64"
+    readonly property color colorActive: "#fff0f5"
     readonly property color colorConnected: "#4ade80"
-
+    
     // ===== СИСТЕМНЫЕ ДАННЫЕ =====
     property int cpuUsage: 0
     property int memoryUsage: 0
@@ -38,13 +34,12 @@ ShellRoot {
     property string networkSSID: ""
     property string currentLanguage: "EN"
 
-    // ===== DYNAMIC ISLAND =====
-    property bool showDynamicIsland: false
-    property bool isMouseOverIsland: false
-    property int currentTab: 0
+    // ===== DYNAMIC DASHBOARD =====
+    property bool showDashboard: false
+    property bool isMouseOverDashboard: false
     
-    // Анимация Island - простой progress от 0 до 1
-    property real islandProgress: 0.0
+    // Dashboard progress animation
+    property real dashboardProgress: 0.0
 
     // ===== MUSIC PLAYER =====
     property string musicTitle: "No Track Playing"
@@ -54,43 +49,43 @@ ShellRoot {
     property string activePlayer: ""
     property var availablePlayers: []
     property int currentPlayerIndex: 0
+    property real musicPosition: 0.0
+    property real musicDuration: 1.0
 
-    // ===== WALLPAPERS =====
-    property var wallpaperList: []
-    property int currentWallpaperIndex: 0
-    property string wallpaperBuffer: ""
-    property real animProgress: 0
-    property bool isAnimating: false
-    property int slideDirection: 0
+    // ===== CALENDAR =====
+    property date currentDate: new Date()
+    property int currentMonth: currentDate.getMonth()
+    property int currentYear: currentDate.getFullYear()
+
+    // ===== QUICK SETTINGS =====
+    property bool wifiEnabled: true
+    property bool bluetoothEnabled: true
+    property bool doNotDisturb: false
+    property bool nightLight: false
 
     // ===== NOTIFICATIONS =====
     property var notifications: [
-        { id: 1, title: "System Update", body: "New updates available", time: "5m ago" },
-        { id: 2, title: "Battery Low", body: "15% remaining", time: "10m ago" }
+        { id: 1, title: "System Update", body: "New updates available for your system", time: "5m ago", icon: "\uf0ed" },
+        { id: 2, title: "Battery Low", body: "15% battery remaining", time: "10m ago", icon: "\uf244" },
+        { id: 3, title: "Message", body: "You have a new message", time: "15m ago", icon: "\uf0e0" }
     ]
 
-    // ===== NETWORK =====
-    property int currentNetworkTab: 0
-    property var wifiNetworks: []
-    property var bluetoothDevices: []
-    property bool wifiScanning: false
-    property bool btScanning: false
-    property string wifiBuffer: ""
-    property string btBuffer: ""
+    // ===== SLIDER CONTROL =====
+    property int activeSlider: 0 // 0 = brightness, 1 = volume
 
     // ===== USER INPUT FLAGS =====
     property bool brightnessUserChanging: false
     property bool volumeUserChanging: false
     property bool micUserChanging: false
 
-    // ===== ФУНКЦИИ УПРАВЛЕНИЯ ISLAND =====
-    function openIsland() {
-        hideIslandTimer.stop()
-        showDynamicIsland = true
+    // ===== ФУНКЦИИ УПРАВЛЕНИЯ DASHBOARD =====
+    function openDashboard() {
+        hideDashboardTimer.stop()
+        showDashboard = true
     }
 
-    function closeIsland() {
-        showDynamicIsland = false
+    function closeDashboard() {
+        showDashboard = false
     }
 
     // ===== ФУНКЦИИ ПЛЕЕРА =====
@@ -100,6 +95,7 @@ ShellRoot {
             activePlayer = availablePlayers[index]
             playerMetadataProcess.running = true
             playerStatusProcess.running = true
+            playerPositionProcess.running = true
         }
     }
 
@@ -113,43 +109,25 @@ ShellRoot {
             switchToPlayer((currentPlayerIndex - 1 + availablePlayers.length) % availablePlayers.length)
     }
 
-    // ===== ФУНКЦИИ КАРУСЕЛИ =====
-    function goToPrevWallpaper() {
-        if (isAnimating || wallpaperList.length <= 1) return
-        isAnimating = true
-        slideDirection = -1
-        animProgress = 0
-        carouselAnimation.restart()
+    // ===== CALENDAR FUNCTIONS =====
+    function getDaysInMonth(month, year) {
+        return new Date(year, month + 1, 0).getDate()
     }
 
-    function goToNextWallpaper() {
-        if (isAnimating || wallpaperList.length <= 1) return
-        isAnimating = true
-        slideDirection = 1
-        animProgress = 0
-        carouselAnimation.restart()
+    function getFirstDayOfMonth(month, year) {
+        return new Date(year, month, 1).getDay()
     }
 
-    // ===== ФУНКЦИИ СЕТИ =====
-    function scanWifi() {
-        if (wifiScanning) return
-        wifiScanning = true
-        wifiBuffer = ""
-        wifiScanProcess.running = true
-    }
-
-    function scanBluetooth() {
-        if (btScanning) return
-        btScanning = true
-        btBuffer = ""
-        btScanProcess.running = true
+    function isToday(day, month, year) {
+        let today = new Date()
+        return day === today.getDate() && month === today.getMonth() && year === today.getFullYear()
     }
 
     // ===== ТАЙМЕРЫ =====
     Timer {
-        id: hideIslandTimer
+        id: hideDashboardTimer
         interval: 300
-        onTriggered: if (!isMouseOverIsland) closeIsland()
+        onTriggered: if (!isMouseOverDashboard) closeDashboard()
     }
 
     // Быстрый таймер (300ms) - аудио, яркость
@@ -163,7 +141,7 @@ ShellRoot {
         }
     }
 
-    // Средний таймер (1.5s) - CPU, RAM, плеер, язык
+    // Средний таймер (1.5s) - CPU, RAM, плеер
     Timer {
         interval: 1500
         running: true
@@ -171,6 +149,15 @@ ShellRoot {
         onTriggered: {
             systemStatsProcess.running = true
             playerListProcess.running = true
+        }
+    }
+
+    // Быстрый таймер для раскладки (200ms) - мгновенное обновление
+    Timer {
+        interval: 200
+        running: true
+        repeat: true
+        onTriggered: {
             langProcess.running = true
         }
     }
@@ -186,45 +173,33 @@ ShellRoot {
         }
     }
 
-    // Таймер для сканирования сетей (только когда Island открыт)
+    // Таймер позиции плеера (обновление каждые 500ms)
     Timer {
-        interval: 5000
-        running: showDynamicIsland && currentTab === 2
+        interval: 500
+        running: showDashboard && activePlayer !== ""
+        repeat: true
+        onTriggered: playerPositionProcess.running = true
+    }
+    
+    // Таймер для плавного обновления прогресса (каждые 100ms когда играет)
+    Timer {
+        interval: 100
+        running: showDashboard && musicPlaying && musicDuration > 0
         repeat: true
         onTriggered: {
-            if (currentNetworkTab === 0) scanWifi()
-            else scanBluetooth()
+            // Плавное увеличение позиции между обновлениями от playerctl
+            if (musicPosition < musicDuration) {
+                musicPosition += 0.1 // 100ms = 0.1 секунды
+            }
         }
     }
 
-    // Таймер обоев
+    // Таймер обновления времени
     Timer {
-        interval: 10000
+        interval: 60000
         running: true
         repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            wallpaperBuffer = ""
-            wallpaperScanProcess.running = true
-        }
-    }
-
-    // Анимация карусели
-    NumberAnimation {
-        id: carouselAnimation
-        target: root
-        property: "animProgress"
-        from: 0; to: 1
-        duration: 350
-        easing.type: Easing.OutCubic
-        onFinished: {
-            currentWallpaperIndex = slideDirection === 1 
-                ? (currentWallpaperIndex + 1) % wallpaperList.length
-                : (currentWallpaperIndex - 1 + wallpaperList.length) % wallpaperList.length
-            isAnimating = false
-            animProgress = 0
-            slideDirection = 0
-        }
+        onTriggered: currentDate = new Date()
     }
 
     // ===== ПРОЦЕССЫ =====
@@ -243,7 +218,7 @@ ShellRoot {
         }
     }
 
-    // CPU + RAM объединены
+    // CPU + RAM
     Process {
         id: systemStatsProcess
         command: ["sh", "-c", "echo $(grep 'cpu ' /proc/stat | awk '{printf \"%.0f\", ($2+$4)*100/($2+$4+$5)}') $(free | awk '/Mem:/ {printf \"%.0f\", $3/$2 * 100}')"]
@@ -286,7 +261,7 @@ ShellRoot {
         command: ["brightnessctl", "set", targetBrightness + "%"]
     }
 
-    // Громкость + Микрофон объединены
+    // Громкость + Микрофон
     Process {
         id: audioProcess
         command: ["sh", "-c", "echo $(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2*100)}') $(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ | awk '{print int($2*100)}')"]
@@ -349,6 +324,7 @@ ShellRoot {
                     }
                     playerMetadataProcess.running = true
                     playerStatusProcess.running = true
+                    playerPositionProcess.running = true
                 } else {
                     activePlayer = ""
                     currentPlayerIndex = 0
@@ -385,6 +361,23 @@ ShellRoot {
     }
 
     Process {
+        id: playerPositionProcess
+        command: ["sh", "-c", activePlayer ? 
+            "echo $(playerctl -p '" + activePlayer + "' position 2>/dev/null || echo '0') $(playerctl -p '" + activePlayer + "' metadata mpris:length 2>/dev/null || echo '1000000')" : "echo '0 1000000'"]
+        stdout: SplitParser {
+            onRead: data => {
+                let parts = data.trim().split(' ')
+                if (parts.length >= 2) {
+                    // playerctl position возвращает секунды с плавающей точкой
+                    musicPosition = parseFloat(parts[0]) || 0
+                    // mpris:length в микросекундах, конвертируем в секунды
+                    musicDuration = (parseFloat(parts[1]) / 1000000) || 1
+                }
+            }
+        }
+    }
+
+    Process {
         id: playerPlayPauseProcess
         command: ["sh", "-c", activePlayer ? "playerctl -p '" + activePlayer + "' play-pause" : "playerctl play-pause"]
     }
@@ -399,338 +392,273 @@ ShellRoot {
         command: ["sh", "-c", activePlayer ? "playerctl -p '" + activePlayer + "' previous" : "playerctl previous"]
     }
 
-    // ===== ОБОИ =====
-    Process {
-        id: wallpaperScanProcess
-        command: ["sh", "-c", "find $HOME/Pictures/Wallpapers -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' \\) 2>/dev/null | sort | head -100"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => { if (data.trim()) wallpaperBuffer += data.trim() + "\n" }
-        }
-        onRunningChanged: {
-            if (!running && wallpaperBuffer.length > 0) {
-                let lines = wallpaperBuffer.trim().split('\n').filter(x => x.trim())
-                if (lines.length > 0) wallpaperList = lines
-                wallpaperBuffer = ""
-            }
-        }
-    }
-
-    Process {
-        id: swwwSetWallpaperProcess
-        property string wallpaperPath: ""
-        command: ["swww", "img", wallpaperPath, "--transition-type", "fade", "--transition-duration", "2"]
-    }
-
-    // ===== WiFi =====
-    Process {
-        id: wifiScanProcess
-        command: ["sh", "-c", "nmcli -t -f SSID,SIGNAL,SECURITY,ACTIVE device wifi list 2>/dev/null | head -20"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => { if (data.trim()) wifiBuffer += data.trim() + "\n" }
-        }
-        onRunningChanged: {
-            if (!running) {
-                let networks = []
-                wifiBuffer.trim().split('\n').filter(x => x.trim()).forEach(line => {
-                    let parts = line.split(':')
-                    if (parts.length >= 3 && parts[0]) {
-                        networks.push({
-                            ssid: parts[0],
-                            signal: parseInt(parts[1]) || 0,
-                            secured: parts[2] !== "" && parts[2] !== "--",
-                            connected: parts[3] === "yes"
-                        })
-                    }
-                })
-                wifiNetworks = networks
-                wifiBuffer = ""
-                wifiScanning = false
-            }
-        }
-    }
-
-    Process {
-        id: wifiConnectProcess
-        property string ssid: ""
-        command: ["nmcli", "device", "wifi", "connect", ssid]
-    }
-
-    Process {
-        id: wifiDisconnectProcess
-        command: ["nmcli", "device", "disconnect", "wlan0"]
-    }
-
-    // ===== Bluetooth =====
-    Process {
-        id: btScanProcess
-        command: ["sh", "-c", "bluetoothctl devices | while read -r line; do mac=$(echo $line | awk '{print $2}'); name=$(echo $line | cut -d' ' -f3-); info=$(bluetoothctl info $mac 2>/dev/null); connected=$(echo \"$info\" | grep -q 'Connected: yes' && echo 'yes' || echo 'no'); icon=$(echo \"$info\" | grep 'Icon:' | awk '{print $2}'); echo \"$name|$mac|$connected|$icon\"; done 2>/dev/null | head -15"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => { if (data.trim()) btBuffer += data.trim() + "\n" }
-        }
-        onRunningChanged: {
-            if (!running) {
-                let devices = []
-                btBuffer.trim().split('\n').filter(x => x.trim()).forEach(line => {
-                    let parts = line.split('|')
-                    if (parts.length >= 3 && parts[0]) {
-                        let t = parts[3] || ""
-                        devices.push({
-                            name: parts[0],
-                            mac: parts[1],
-                            connected: parts[2] === "yes",
-                            type: t.includes("audio") || t.includes("headset") ? "audio" :
-                                  t.includes("input") || t.includes("mouse") ? "input" :
-                                  t.includes("phone") ? "phone" : "other"
-                        })
-                    }
-                })
-                bluetoothDevices = devices
-                btBuffer = ""
-                btScanning = false
-            }
-        }
-    }
-
-    Process {
-        id: btConnectProcess
-        property string mac: ""
-        command: ["bluetoothctl", "connect", mac]
-    }
-
-    Process {
-        id: btDisconnectProcess
-        property string mac: ""
-        command: ["bluetoothctl", "disconnect", mac]
-    }
-
     // ===== КОМПОНЕНТЫ =====
     
-    // Универсальная кнопка
-    component IconButton: Rectangle {
-        id: iconBtn
-        property string icon: ""
-        property real iconSize: 14
-        property bool circular: true
-        signal clicked()
+    // Круговой прогресс-бар для плеера
+    component CircularProgress: Item {
+        id: circProg
+        property real progress: 0.0
+        property real size: 140
+        property real lineWidth: 6
         
-        radius: circular ? width/2 : 6
-        color: iconBtnMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-        Behavior on color { ColorAnimation { duration: 150 } }
+        width: size
+        height: size
         
-        Text {
-            anchors.centerIn: parent
-            text: iconBtn.icon
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: iconBtn.iconSize
-            color: colorTextSecondary
-        }
-        
-        MouseArea {
-            id: iconBtnMouse
+        Canvas {
             anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: iconBtn.clicked()
+            onPaint: {
+                let ctx = getContext("2d")
+                let centerX = width / 2
+                let centerY = height / 2
+                let radius = (width - circProg.lineWidth) / 2
+                
+                ctx.clearRect(0, 0, width, height)
+                
+                // Background circle
+                ctx.beginPath()
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
+                ctx.strokeStyle = "#2a2a2a"
+                ctx.lineWidth = circProg.lineWidth
+                ctx.stroke()
+                
+                // Progress arc
+                ctx.beginPath()
+                ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * circProg.progress))
+                ctx.strokeStyle = colorAccent
+                ctx.lineWidth = circProg.lineWidth
+                ctx.lineCap = "round"
+                ctx.stroke()
+            }
         }
+        
+        onProgressChanged: requestPaint()
+        
+        Component.onCompleted: requestPaint()
     }
 
-    // Универсальный слайдер
-    component CustomSlider: Row {
-        id: sliderRow
-        property string icon: ""
-        property real sliderValue: 50
-        property bool userChanging: false
-        signal sliderMoved(real newValue)
-        
-        spacing: 15
-        height: 30
-        
-        Text {
-            text: sliderRow.icon
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 16
-            color: colorTextSecondary
-            anchors.verticalCenter: parent.verticalCenter
-            width: 20
-        }
-        
-        Item {
-            width: sliderRow.width - 85
-            height: 30
-            anchors.verticalCenter: parent.verticalCenter
-            
-            Rectangle {
-                anchors.centerIn: parent
-                width: parent.width
-                height: 6
-                color: colorSliderBg
-                radius: 3
-                
-                Rectangle {
-                    width: (sliderRow.sliderValue / 100) * parent.width
-                    height: parent.height
-                    color: colorBgWorkspaceActive
-                    radius: 3
-                }
-            }
-            
-            Rectangle {
-                x: (sliderRow.sliderValue / 100) * (parent.width - width)
-                y: (parent.height - height) / 2
-                width: 18; height: 18; radius: 9
-                color: colorBgWorkspaceActive
-                Behavior on x { enabled: !sliderMouse.pressed; NumberAnimation { duration: 100 } }
-            }
-            
-            MouseArea {
-                id: sliderMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                
-                function updateValue(mouseX) {
-                    let val = Math.max(0, Math.min(100, (mouseX / width) * 100))
-                    sliderRow.sliderMoved(Math.round(val))
-                }
-                
-                onPressed: updateValue(mouse.x)
-                onPositionChanged: if (pressed) updateValue(mouse.x)
-            }
-        }
-        
-        Text {
-            text: Math.round(sliderRow.sliderValue) + "%"
-            font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 13
-            color: colorTextSecondary
-            width: 45
-            anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignRight
-        }
-    }
-
-    // Карточка статистики
-    component StatCard: Rectangle {
+    // Быстрая настройка
+    component QuickSettingButton: Rectangle {
+        id: qsBtn
         property string icon: ""
         property string label: ""
-        property string value: ""
+        property bool active: false
+        signal clicked()
         
-        width: (parent.width - 20) / 3
-        height: 60
-        color: colorCardBg
+        width: 50
+        height: 50
         radius: 10
+        color: active ? colorAccent : (qsMouse.containsMouse ? colorBgCardHover : colorBgCard)
+        
+        Behavior on color { ColorAnimation { duration: 200 } }
         
         Column {
             anchors.centerIn: parent
-            spacing: 5
+            spacing: 4
             
-            Row {
+            Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 6
-                Text {
-                    text: icon
-                    color: colorTextSecondary
-                    font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 14
-                }
-                Text {
-                    text: label
-                    color: colorTextSecondary
-                    font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 13
-                }
+                text: qsBtn.icon
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 16
+                color: qsBtn.active ? colorBgPrimary : colorTextPrimary
             }
             
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: value
-                color: colorTextSecondary
+                text: qsBtn.label
                 font.family: "JetBrainsMono Nerd Font"
-                font.pixelSize: 18
-                font.weight: Font.Bold
+                font.pixelSize: 7
+                color: qsBtn.active ? colorBgPrimary : colorTextSecondary
             }
+        }
+        
+        MouseArea {
+            id: qsMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: qsBtn.clicked()
         }
     }
 
-    // Элемент списка сети
-    component NetworkItem: Rectangle {
-        id: netItem
+    // Вертикальный слайдер
+    component VerticalSlider: Column {
+        id: vSlider
         property string icon: ""
-        property string name: ""
-        property string subtitle: ""
-        property bool isConnected: false
-        signal connectClicked()
+        property real sliderValue: 50
+        signal sliderMoved(real newValue)
+        
+        spacing: 10
+        width: 50
+        
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: vSlider.icon
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 20
+            color: colorTextPrimary
+        }
+        
+        Item {
+            width: 50
+            height: 200
+            anchors.horizontalCenter: parent.horizontalCenter
+            
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 8
+                height: parent.height
+                color: "#2a2a2a"
+                radius: 4
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: (vSlider.sliderValue / 100) * parent.height
+                    color: colorAccent
+                    radius: 4
+                }
+            }
+            
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - (vSlider.sliderValue / 100) * parent.height - height / 2
+                width: 20
+                height: 20
+                radius: 10
+                color: colorAccent
+                
+                Behavior on y { 
+                    enabled: !vSliderMouse.pressed
+                    NumberAnimation { duration: 100 }
+                }
+            }
+            
+            MouseArea {
+                id: vSliderMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                
+                function updateValue(mouseY) {
+                    let val = 100 - Math.max(0, Math.min(100, (mouseY / height) * 100))
+                    vSlider.sliderMoved(Math.round(val))
+                }
+                
+                onPressed: updateValue(mouse.y)
+                onPositionChanged: if (pressed) updateValue(mouse.y)
+            }
+        }
+        
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: Math.round(vSlider.sliderValue) + "%"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 12
+            color: colorTextSecondary
+        }
+    }
+
+    // Карточка уведомления
+    component NotificationCard: Rectangle {
+        id: notifCard
+        property string icon: "\uf0f3"
+        property string title: ""
+        property string body: ""
+        property string time: ""
+        signal removeClicked()
         
         width: parent.width
-        height: 50
-        color: netItemMouse.containsMouse ? colorCardBgHover : colorCardBg
-        radius: 8
+        height: 70
+        radius: 12
+        color: notifMouse.containsMouse ? colorBgCardHover : colorBgCard
+        
         Behavior on color { ColorAnimation { duration: 150 } }
         
-        MouseArea { id: netItemMouse; anchors.fill: parent; hoverEnabled: true }
+        MouseArea {
+            id: notifMouse
+            anchors.fill: parent
+            hoverEnabled: true
+        }
         
         Row {
             anchors.fill: parent
             anchors.margins: 12
             spacing: 12
             
-            Text {
-                text: netItem.icon
-                font.family: "JetBrainsMono Nerd Font"
-                font.pixelSize: 18
-                color: netItem.isConnected ? colorConnected : colorTextSecondary
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            
-            Column {
-                width: parent.width - 150
-                spacing: 3
+            Rectangle {
+                width: 45
+                height: 45
+                radius: 10
+                color: Qt.rgba(0.91, 0.71, 0.64, 0.1)
                 anchors.verticalCenter: parent.verticalCenter
                 
                 Text {
-                    text: netItem.name
-                    color: colorTextSecondary
+                    anchors.centerIn: parent
+                    text: notifCard.icon
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: 20
+                    color: colorAccent
+                }
+            }
+            
+            Column {
+                width: parent.width - 120
+                spacing: 4
+                anchors.verticalCenter: parent.verticalCenter
+                
+                Text {
+                    text: notifCard.title
+                    color: colorTextPrimary
                     font.family: "JetBrainsMono Nerd Font"
                     font.pixelSize: 13
-                    font.weight: netItem.isConnected ? Font.Bold : Font.Medium
+                    font.weight: Font.Bold
                     elide: Text.ElideRight
                     width: parent.width
                 }
                 
                 Text {
-                    text: netItem.subtitle
-                    color: netItem.isConnected ? colorConnected : colorTextSecondary
+                    text: notifCard.body
+                    color: colorTextSecondary
                     font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 10
-                    opacity: netItem.isConnected ? 1.0 : 0.6
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                }
+                
+                Text {
+                    text: notifCard.time
+                    color: colorTextDim
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: 9
                 }
             }
             
             Rectangle {
-                width: 85; height: 28; radius: 6
-                color: netItem.isConnected ? colorConnected : 
-                       netConnectMouse.containsMouse ? colorButtonBgHover : colorButtonBg
+                width: 30
+                height: 30
+                radius: 8
+                color: closeMouse.containsMouse ? Qt.rgba(0.91, 0.71, 0.64, 0.2) : "transparent"
                 anchors.verticalCenter: parent.verticalCenter
+                
                 Behavior on color { ColorAnimation { duration: 150 } }
                 
                 Text {
                     anchors.centerIn: parent
-                    text: netItem.isConnected ? "Disconnect" : "Connect"
-                    color: netItem.isConnected ? "#000000" : colorTextSecondary
+                    text: "\uf00d"
                     font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 11
-                    font.weight: Font.Medium
+                    font.pixelSize: 14
+                    color: colorTextSecondary
                 }
                 
                 MouseArea {
-                    id: netConnectMouse
+                    id: closeMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: netItem.connectClicked()
+                    onClicked: notifCard.removeClicked()
                 }
             }
         }
@@ -740,8 +668,6 @@ ShellRoot {
         networkProcess.running = true
         batteryProcess.running = true
         systemStatsProcess.running = true
-        scanWifi()
-        scanBluetooth()
     }
 
     // ===== ЭКРАНЫ =====
@@ -752,19 +678,19 @@ ShellRoot {
             Item {
                 property var modelData
 
-                // ===== DYNAMIC ISLAND =====
+                // ===== DASHBOARD =====
                 PanelWindow {
-                    id: dynamicIsland
+                    id: dashboard
                     screen: modelData
-                    visible: showDynamicIsland && modelData.name === "DP-1"
+                    visible: showDashboard && modelData.name === "DP-1"
                     
                     anchors { top: true; left: true }
                     margins { 
                         top: 3
-                        left: (modelData.width - 940) / 2 
+                        left: (modelData.width - 880) / 2 
                     }
-                    width: 940
-                    height: 550
+                    width: 880
+                    height: 520
                     color: "transparent"
                     focusable: true
                     exclusionMode: ExclusionMode.Ignore
@@ -772,23 +698,20 @@ ShellRoot {
                     Item {
                         anchors.fill: parent
                         focus: true
-                        Keys.onEscapePressed: closeIsland()
+                        Keys.onEscapePressed: closeDashboard()
                     }
                     
-                    // Контейнер с анимацией масштаба
+                    // Контейнер с анимацией
                     Item {
-                        id: islandScaleContainer
+                        id: dashboardScaleContainer
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
                         width: parent.width
                         height: parent.height
-                        
-                        // Трансформация от верхнего центра
                         transformOrigin: Item.Top
                         
-                        // Плавная анимация scale
-                        scale: islandProgress
-                        opacity: islandProgress
+                        scale: dashboardProgress
+                        opacity: dashboardProgress
                         
                         Behavior on scale {
                             NumberAnimation {
@@ -805,886 +728,910 @@ ShellRoot {
                         }
                         
                         Rectangle {
-                            id: islandContainer
                             anchors.fill: parent
                             color: colorBgPrimary
-                            radius: 15
-                            clip: true
+                            radius: 20
                             
                             HoverHandler {
                                 onHoveredChanged: {
-                                    isMouseOverIsland = hovered
-                                    if (hovered) hideIslandTimer.stop()
-                                    else hideIslandTimer.restart()
+                                    isMouseOverDashboard = hovered
+                                    if (hovered) hideDashboardTimer.stop()
+                                    else hideDashboardTimer.restart()
                                 }
                             }
                             
-                            Column {
+                            Row {
                                 anchors.fill: parent
-                                anchors.margins: 20
-                                spacing: 15
+                                anchors.margins: 15
+                                spacing: 12
                                 
-                                // Табы
-                                Row {
-                                    id: tabRow
-                                    width: parent.width; height: 40; spacing: 10
+                                // ===== LEFT: ПЛЕЕР =====
+                                Rectangle {
+                                    width: 210
+                                    height: parent.height
+                                    radius: 18
+                                    color: colorBgCard
                                     
-                                    Repeater {
-                                        model: ["Dashboard", "Wallpapers", "Network"]
+                                    Column {
+                                        anchors.centerIn: parent
+                                        spacing: 20
                                         
-                                        Rectangle {
-                                            width: (tabRow.width - 20) / 3; height: 40; radius: 8
-                                            color: currentTab === index ? colorBgWorkspaceActive : 
-                                                   tabMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                        // Круговой прогресс с обложкой
+                                        Item {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            width: 130
+                                            height: 130
+                                            
+                                            CircularProgress {
+                                                anchors.centerIn: parent
+                                                size: 130
+                                                lineWidth: 5
+                                                progress: musicDuration > 0 ? musicPosition / musicDuration : 0
+                                            }
+                                            
+                                            // Обложка альбома
+                                            Item {
+                                                id: albumArtContainer
+                                                anchors.centerIn: parent
+                                                width: 100
+                                                height: 100
+                                                
+                                                // Загрузка изображения (скрыто)
+                                                Image {
+                                                    id: albumImage
+                                                    source: musicArtUrl
+                                                    visible: false
+                                                    asynchronous: true
+                                                    cache: true
+                                                    smooth: true
+                                                }
+                                                
+                                                // Canvas для рисования круглого изображения
+                                                Canvas {
+                                                    id: albumCanvas
+                                                    anchors.fill: parent
+                                                    visible: albumImage.status === Image.Ready
+                                                    
+                                                    onPaint: {
+                                                        let ctx = getContext("2d")
+                                                        ctx.clearRect(0, 0, width, height)
+                                                        
+                                                        // Создаём круглую маску
+                                                        ctx.save()
+                                                        ctx.beginPath()
+                                                        ctx.arc(width / 2, height / 2, width / 2, 0, 2 * Math.PI)
+                                                        ctx.closePath()
+                                                        ctx.clip()
+                                                        
+                                                        // Рисуем изображение
+                                                        if (albumImage.status === Image.Ready) {
+                                                            ctx.drawImage(albumImage, 0, 0, width, height)
+                                                        }
+                                                        
+                                                        ctx.restore()
+                                                    }
+                                                    
+                                                    Connections {
+                                                        target: albumImage
+                                                        function onStatusChanged() {
+                                                            if (albumImage.status === Image.Ready) {
+                                                                albumCanvas.requestPaint()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Placeholder когда нет изображения
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    radius: 50
+                                                    color: colorBgPrimary
+                                                    visible: musicArtUrl === "" || albumImage.status !== Image.Ready
+                                                    
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "\uf001"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 40
+                                                        color: colorTextDim
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Информация о треке
+                                        Column {
+                                            width: 200
+                                            spacing: 5
+                                            anchors.horizontalCenter: parent.horizontalCenter
                                             
                                             Text {
-                                                anchors.centerIn: parent
-                                                text: modelData
-                                                color: currentTab === index ? colorTextWorkspaceActive : colorTextSecondary
+                                                text: musicTitle
+                                                color: colorTextPrimary
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 14
+                                                font.weight: Font.Bold
+                                                elide: Text.ElideRight
+                                                width: parent.width
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+                                            
+                                            Text {
+                                                text: musicArtist
+                                                color: colorTextSecondary
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
+                                                width: parent.width
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+                                        }
+                                        
+                                        // Время
+                                        Row {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            spacing: 10
+                                            
+                                            Text {
+                                                text: {
+                                                    let pos = Math.floor(musicPosition)
+                                                    let mins = Math.floor(pos / 60)
+                                                    let secs = pos % 60
+                                                    return mins + ":" + (secs < 10 ? "0" : "") + secs
+                                                }
+                                                color: colorTextDim
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                            
+                                            Text {
+                                                text: "/"
+                                                color: colorTextDim
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                            
+                                            Text {
+                                                text: {
+                                                    let dur = Math.floor(musicDuration)
+                                                    let mins = Math.floor(dur / 60)
+                                                    let secs = dur % 60
+                                                    return mins + ":" + (secs < 10 ? "0" : "") + secs
+                                                }
+                                                color: colorTextDim
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                        
+                                        // Контролы
+                                        Row {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            spacing: 15
+                                            
+                                            Rectangle {
+                                                width: 45
+                                                height: 45
+                                                radius: 12
+                                                color: prevMouse.containsMouse ? colorBgCardHover : "transparent"
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                                
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "\uf048"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 18
+                                                    color: colorTextPrimary
+                                                }
+                                                
+                                                MouseArea {
+                                                    id: prevMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: playerPreviousProcess.running = true
+                                                }
+                                            }
+                                            
+                                            Rectangle {
+                                                width: 55
+                                                height: 55
+                                                radius: 15
+                                                color: playMouse.containsMouse ? colorAccentHover : colorAccent
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                                
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: musicPlaying ? "\uf04c" : "\uf04b"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 20
+                                                    color: colorBgPrimary
+                                                }
+                                                
+                                                MouseArea {
+                                                    id: playMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: playerPlayPauseProcess.running = true
+                                                }
+                                            }
+                                            
+                                            Rectangle {
+                                                width: 45
+                                                height: 45
+                                                radius: 12
+                                                color: nextMouse.containsMouse ? colorBgCardHover : "transparent"
+                                                
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                                
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "\uf051"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 18
+                                                    color: colorTextPrimary
+                                                }
+                                                
+                                                MouseArea {
+                                                    id: nextMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: playerNextProcess.running = true
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Индикатор плееров
+                                        Row {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            spacing: 6
+                                            visible: availablePlayers.length > 1
+                                            
+                                            Repeater {
+                                                model: Math.min(availablePlayers.length, 5)
+                                                
+                                                Rectangle {
+                                                    width: index === currentPlayerIndex ? 20 : 8
+                                                    height: 8
+                                                    radius: 4
+                                                    color: index === currentPlayerIndex ? colorAccent : colorTextDim
+                                                    
+                                                    Behavior on width { NumberAnimation { duration: 200 } }
+                                                    Behavior on color { ColorAnimation { duration: 200 } }
+                                                    
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        anchors.margins: -5
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: switchToPlayer(index)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // ===== CENTER: БЫСТРЫЕ НАСТРОЙКИ + КАЛЕНДАРЬ =====
+                                Column {
+                                    width: 390
+                                    height: parent.height
+                                    spacing: 12
+                                    
+                                    // Быстрые настройки
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 100
+                                        radius: 15
+                                        color: colorBgCard
+                                        
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            spacing: 10
+                                            
+                                            Text {
+                                                text: "Quick Settings"
+                                                color: colorTextPrimary
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 14
                                                 font.weight: Font.Bold
                                             }
                                             
-                                            MouseArea {
-                                                id: tabMouse
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: currentTab = index
+                                            Row {
+                                                spacing: 8
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf1eb"
+                                                    label: "WiFi"
+                                                    active: wifiEnabled
+                                                    onClicked: wifiEnabled = !wifiEnabled
+                                                }
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf293"
+                                                    label: "Bluetooth"
+                                                    active: bluetoothEnabled
+                                                    onClicked: bluetoothEnabled = !bluetoothEnabled
+                                                }
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf1f6"
+                                                    label: "DND"
+                                                    active: doNotDisturb
+                                                    onClicked: doNotDisturb = !doNotDisturb
+                                                }
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf186"
+                                                    label: "Night"
+                                                    active: nightLight
+                                                    onClicked: nightLight = !nightLight
+                                                }
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf011"
+                                                    label: "Power"
+                                                    active: false
+                                                    onClicked: {
+                                                        // Power menu
+                                                    }
+                                                }
+                                                
+                                                QuickSettingButton {
+                                                    icon: "\uf013"
+                                                    label: "Settings"
+                                                    active: false
+                                                    onClicked: {
+                                                        // Settings
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Календарь
+                                    Rectangle {
+                                        width: parent.width
+                                        height: parent.height - 112
+                                        radius: 15
+                                        color: colorBgCard
+                                        
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 15
+                                            spacing: 12
+                                            
+                                            // Заголовок календаря
+                                            Row {
+                                                width: parent.width
+                                                
+                                                Text {
+                                                    text: Qt.formatDate(new Date(currentYear, currentMonth, 1), "MMMM yyyy")
+                                                    color: colorTextPrimary
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 16
+                                                    font.weight: Font.Bold
+                                                    width: parent.width - 100
+                                                }
+                                                
+                                                Row {
+                                                    spacing: 8
+                                                    
+                                                    Rectangle {
+                                                        width: 35
+                                                        height: 35
+                                                        radius: 10
+                                                        color: prevMonthMouse.containsMouse ? colorBgCardHover : "transparent"
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                                        
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "\uf053"
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 14
+                                                            color: colorTextPrimary
+                                                        }
+                                                        
+                                                        MouseArea {
+                                                            id: prevMonthMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                if (currentMonth === 0) {
+                                                                    currentMonth = 11
+                                                                    currentYear--
+                                                                } else {
+                                                                    currentMonth--
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    Rectangle {
+                                                        width: 35
+                                                        height: 35
+                                                        radius: 10
+                                                        color: nextMonthMouse.containsMouse ? colorBgCardHover : "transparent"
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                                        
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "\uf054"
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 14
+                                                            color: colorTextPrimary
+                                                        }
+                                                        
+                                                        MouseArea {
+                                                            id: nextMonthMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                if (currentMonth === 11) {
+                                                                    currentMonth = 0
+                                                                    currentYear++
+                                                                } else {
+                                                                    currentMonth++
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Дни недели
+                                            Grid {
+                                                columns: 7
+                                                columnSpacing: 6
+                                                rowSpacing: 0
+                                                width: parent.width
+                                                
+                                                Repeater {
+                                                    model: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                                                    
+                                                    Text {
+                                                        text: modelData
+                                                        color: colorTextDim
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 10
+                                                        font.weight: Font.Medium
+                                                        width: (parent.width - 36) / 7
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Сетка календаря
+                                            Grid {
+                                                columns: 7
+                                                columnSpacing: 6
+                                                rowSpacing: 6
+                                                width: parent.width
+                                                
+                                                Repeater {
+                                                    model: {
+                                                        let days = []
+                                                        let firstDay = getFirstDayOfMonth(currentMonth, currentYear)
+                                                        let daysInMonth = getDaysInMonth(currentMonth, currentYear)
+                                                        
+                                                        // Пустые ячейки до первого дня
+                                                        for (let i = 0; i < firstDay; i++) {
+                                                            days.push({ day: 0, isCurrentMonth: false })
+                                                        }
+                                                        
+                                                        // Дни текущего месяца
+                                                        for (let i = 1; i <= daysInMonth; i++) {
+                                                            days.push({ day: i, isCurrentMonth: true })
+                                                        }
+                                                        
+                                                        return days
+                                                    }
+                                                    
+                                                    Rectangle {
+                                                        width: (parent.width - 36) / 7
+                                                        height: width
+                                                        radius: width / 2
+                                                        color: {
+                                                            if (!modelData.isCurrentMonth) return "transparent"
+                                                            if (isToday(modelData.day, currentMonth, currentYear)) return colorAccent
+                                                            if (dayMouse.containsMouse) return colorBgCardHover
+                                                            return "transparent"
+                                                        }
+                                                        
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                                        
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: modelData.isCurrentMonth ? modelData.day : ""
+                                                            color: {
+                                                                if (!modelData.isCurrentMonth) return "transparent"
+                                                                if (isToday(modelData.day, currentMonth, currentYear)) return colorBgPrimary
+                                                                return colorTextPrimary
+                                                            }
+                                                            font.family: "JetBrainsMono Nerd Font"
+                                                            font.pixelSize: 12
+                                                            font.weight: isToday(modelData.day, currentMonth, currentYear) ? Font.Bold : Font.Normal
+                                                        }
+                                                        
+                                                        MouseArea {
+                                                            id: dayMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: modelData.isCurrentMonth
+                                                            cursorShape: modelData.isCurrentMonth ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                                 
-                                // Контент
-                                Item {
-                                    width: parent.width
-                                    height: parent.height - 55
+                                // ===== RIGHT: СИСТЕМНАЯ ИНФОРМАЦИЯ + ЗВУК + УВЕДОМЛЕНИЯ =====
+                                Column {
+                                    width: 220
+                                    height: parent.height
+                                    spacing: 12
                                     
-                                    // ===== DASHBOARD =====
-                                    Loader {
-                                        anchors.fill: parent
-                                        active: currentTab === 0
-                                        sourceComponent: Column {
-                                            spacing: 15
+                                    // Системная информация
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 100
+                                        radius: 15
+                                        color: colorBgCard
+                                        
+                                        Row {
+                                            anchors.centerIn: parent
+                                            spacing: 20
                                             
-                                            // Плеер
-                                            Rectangle {
-                                                width: parent.width; height: 100
-                                                color: colorCardBg; radius: 10
+                                            Column {
+                                                spacing: 4
                                                 
-                                                Row {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 12
-                                                    spacing: 12
-                                                    
-                                                    // Обложка
-                                                    Rectangle {
-                                                        width: 76; height: 76; radius: 8
-                                                        color: colorButtonBg
-                                                        clip: true
-                                                        
-                                                        Image {
-                                                            anchors.fill: parent
-                                                            source: musicArtUrl
-                                                            fillMode: Image.PreserveAspectCrop
-                                                            asynchronous: true
-                                                            cache: true
-                                                            visible: status === Image.Ready
-                                                        }
-                                                        
-                                                        Text {
-                                                            anchors.centerIn: parent
-                                                            text: "\uf001"
-                                                            font.family: "JetBrainsMono Nerd Font"
-                                                            font.pixelSize: 30
-                                                            color: colorTextSecondary
-                                                            opacity: 0.3
-                                                            visible: musicArtUrl === "" || parent.children[0].status !== Image.Ready
-                                                        }
-                                                    }
-                                                    
-                                                    // Инфо + Контролы
-                                                    Column {
-                                                        width: parent.width - 88
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        spacing: 8
-                                                        
-                                                        // Название и исполнитель
-                                                        Column {
-                                                            width: parent.width
-                                                            spacing: 2
-                                                            
-                                                            Text {
-                                                                text: musicTitle
-                                                                color: colorTextSecondary
-                                                                font.family: "JetBrainsMono Nerd Font"
-                                                                font.pixelSize: 15
-                                                                font.weight: Font.Bold
-                                                                elide: Text.ElideRight
-                                                                width: parent.width
-                                                            }
-                                                            
-                                                            Text {
-                                                                text: musicArtist
-                                                                color: colorTextSecondary
-                                                                font.family: "JetBrainsMono Nerd Font"
-                                                                font.pixelSize: 12
-                                                                opacity: 0.7
-                                                                elide: Text.ElideRight
-                                                                width: parent.width
-                                                            }
-                                                        }
-                                                        
-                                                        // Контролы плеера
-                                                        Row {
-                                                            spacing: 8
-                                                            
-                                                            IconButton {
-                                                                width: 36; height: 36
-                                                                icon: "\uf048"
-                                                                onClicked: playerPreviousProcess.running = true
-                                                            }
-                                                            
-                                                            Rectangle {
-                                                                width: 44; height: 44; radius: 22
-                                                                color: playMouse.containsMouse ? Qt.lighter(colorBgWorkspaceActive, 1.1) : colorBgWorkspaceActive
-                                                                Behavior on color { ColorAnimation { duration: 150 } }
-                                                                
-                                                                Text {
-                                                                    anchors.centerIn: parent
-                                                                    text: musicPlaying ? "\uf04c" : "\uf04b"
-                                                                    font.family: "JetBrainsMono Nerd Font"
-                                                                    font.pixelSize: 16
-                                                                    color: colorTextWorkspaceActive
-                                                                }
-                                                                
-                                                                MouseArea {
-                                                                    id: playMouse
-                                                                    anchors.fill: parent
-                                                                    hoverEnabled: true
-                                                                    cursorShape: Qt.PointingHandCursor
-                                                                    onClicked: playerPlayPauseProcess.running = true
-                                                                }
-                                                            }
-                                                            
-                                                            IconButton {
-                                                                width: 36; height: 36
-                                                                icon: "\uf051"
-                                                                onClicked: playerNextProcess.running = true
-                                                            }
-                                                            
-                                                            Item { width: 15; height: 1 }
-                                                            
-                                                            // Переключатель плееров
-                                                            Row {
-                                                                spacing: 6
-                                                                visible: availablePlayers.length > 1
-                                                                anchors.verticalCenter: parent.verticalCenter
-                                                                
-                                                                IconButton {
-                                                                    width: 24; height: 24; iconSize: 10
-                                                                    icon: "\uf053"
-                                                                    onClicked: prevPlayer()
-                                                                }
-                                                                
-                                                                Row {
-                                                                    spacing: 5
-                                                                    anchors.verticalCenter: parent.verticalCenter
-                                                                    
-                                                                    Repeater {
-                                                                        model: availablePlayers
-                                                                        Rectangle {
-                                                                            width: dotMouse.containsMouse ? 10 : 8
-                                                                            height: width; radius: width/2
-                                                                            color: index === currentPlayerIndex ? colorBgWorkspaceActive : colorSliderBg
-                                                                            Behavior on width { NumberAnimation { duration: 100 } }
-                                                                            Behavior on color { ColorAnimation { duration: 150 } }
-                                                                            
-                                                                            MouseArea {
-                                                                                id: dotMouse
-                                                                                anchors.fill: parent
-                                                                                anchors.margins: -4
-                                                                                hoverEnabled: true
-                                                                                cursorShape: Qt.PointingHandCursor
-                                                                                onClicked: switchToPlayer(index)
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                
-                                                                IconButton {
-                                                                    width: 24; height: 24; iconSize: 10
-                                                                    icon: "\uf054"
-                                                                    onClicked: nextPlayer()
-                                                                }
-                                                            }
-                                                        }
-                                                    }
+                                                Text {
+                                                    text: "\uf2db"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 18
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: cpuUsage + "%"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 12
+                                                    font.weight: Font.Bold
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: "CPU"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 8
+                                                    color: colorTextDim
+                                                    anchors.horizontalCenter: parent.horizontalCenter
                                                 }
                                             }
                                             
-                                            // Статистика
-                                            Row {
-                                                width: parent.width; height: 60; spacing: 10
-                                                StatCard { icon: "\uf2db"; label: "CPU"; value: cpuUsage + "%" }
-                                                StatCard { icon: "\uefc5"; label: "RAM"; value: memoryUsage + "%" }
-                                                StatCard { 
-                                                    icon: batteryCharging ? "\uf0e7" : 
+                                            Column {
+                                                spacing: 4
+                                                
+                                                Text {
+                                                    text: "\uefc5"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 18
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: memoryUsage + "%"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 12
+                                                    font.weight: Font.Bold
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: "RAM"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 8
+                                                    color: colorTextDim
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                            }
+                                            
+                                            Column {
+                                                spacing: 4
+                                                
+                                                Text {
+                                                    text: batteryCharging ? "\uf0e7" : 
                                                           batteryLevel > 80 ? "\uf240" : batteryLevel > 60 ? "\uf241" : 
                                                           batteryLevel > 40 ? "\uf242" : batteryLevel > 20 ? "\uf243" : "\uf244"
-                                                    label: "Battery"
-                                                    value: batteryLevel + "%"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 18
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: batteryLevel + "%"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 12
+                                                    font.weight: Font.Bold
+                                                    color: colorTextPrimary
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                }
+                                                
+                                                Text {
+                                                    text: "BAT"
+                                                    font.family: "JetBrainsMono Nerd Font"
+                                                    font.pixelSize: 8
+                                                    color: colorTextDim
+                                                    anchors.horizontalCenter: parent.horizontalCenter
                                                 }
                                             }
+                                        }
+                                    }
+                                    
+                                    // Настройки звука и яркости (вертикальные слайдеры)
+                                    Rectangle {
+                                        width: parent.width
+                                        height: parent.height - 112
+                                        radius: 15
+                                        color: colorBgCard
+                                        
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            spacing: 10
                                             
-                                            // Слайдеры
-                                            Column {
-                                                width: parent.width; spacing: 12
-                                                
-                                                CustomSlider {
-                                                    width: parent.width
-                                                    icon: "\uf185"
-                                                    sliderValue: brightness
-                                                    onSliderMoved: newValue => {
-                                                        brightnessUserChanging = true
-                                                        brightness = newValue
-                                                        brightnessChangeProcess.targetBrightness = newValue
-                                                        brightnessChangeProcess.running = true
-                                                        Qt.callLater(() => brightnessUserChanging = false)
-                                                    }
-                                                }
-                                                
-                                                CustomSlider {
-                                                    width: parent.width
-                                                    icon: "\uf028"
-                                                    sliderValue: volume
-                                                    onSliderMoved: newValue => {
-                                                        volumeUserChanging = true
-                                                        volume = newValue
-                                                        volumeChangeProcess.targetVolume = newValue
-                                                        volumeChangeProcess.running = true
-                                                        Qt.callLater(() => volumeUserChanging = false)
-                                                    }
-                                                }
-                                                
-                                                CustomSlider {
-                                                    width: parent.width
-                                                    icon: "\uf130"
-                                                    sliderValue: micVolume
-                                                    onSliderMoved: newValue => {
-                                                        micUserChanging = true
-                                                        micVolume = newValue
-                                                        micChangeProcess.targetVolume = newValue
-                                                        micChangeProcess.running = true
-                                                        Qt.callLater(() => micUserChanging = false)
-                                                    }
-                                                }
+                                            Text {
+                                                text: "Controls"
+                                                color: colorTextPrimary
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 13
+                                                font.weight: Font.Bold
+                                                anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             
-                                            // Уведомления
-                                            Rectangle {
-                                                width: parent.width; height: 155
-                                                color: colorCardBg; radius: 10
+                                            Row {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                spacing: 12
                                                 
+                                                // Яркость
                                                 Column {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 12
-                                                    spacing: 8
+                                                    spacing: 15
                                                     
-                                                    Row {
-                                                        width: parent.width
+                                                    Text {
+                                                        text: "\uf185"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 18
+                                                        color: colorTextPrimary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+                                                    
+                                                    Item {
+                                                        width: 30
+                                                        height: 230
+                                                        anchors.horizontalCenter: parent.horizontalCenter
                                                         
-                                                        Text {
-                                                            text: "Notifications"
-                                                            color: colorTextSecondary
-                                                            font.family: "JetBrainsMono Nerd Font"
-                                                            font.pixelSize: 14
-                                                            font.weight: Font.Bold
-                                                            width: parent.width - 90
+                                                        Rectangle {
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            width: 8
+                                                            height: parent.height
+                                                            color: "#2a2a2a"
+                                                            radius: 4
+                                                            
+                                                            Rectangle {
+                                                                anchors.bottom: parent.bottom
+                                                                width: parent.width
+                                                                height: (brightness / 100) * parent.height
+                                                                color: colorAccent
+                                                                radius: 4
+                                                            }
                                                         }
                                                         
                                                         Rectangle {
-                                                            width: 80; height: 24; radius: 5
-                                                            color: clearMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-                                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            y: parent.height - (brightness / 100) * parent.height - height / 2
+                                                            width: 20
+                                                            height: 20
+                                                            radius: 10
+                                                            color: colorAccent
                                                             
-                                                            Text {
-                                                                anchors.centerIn: parent
-                                                                text: "Clear All"
-                                                                color: colorTextSecondary
-                                                                font.family: "JetBrainsMono Nerd Font"
-                                                                font.pixelSize: 11
+                                                            Behavior on y {
+                                                                enabled: !brightSliderMouse.pressed
+                                                                NumberAnimation { duration: 100 }
                                                             }
-                                                            
-                                                            MouseArea {
-                                                                id: clearMouse
-                                                                anchors.fill: parent
-                                                                hoverEnabled: true
-                                                                cursorShape: Qt.PointingHandCursor
-                                                                onClicked: notifications = []
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    Column {
-                                                        width: parent.width; spacing: 6
-                                                        
-                                                        Repeater {
-                                                            model: notifications.slice(0, 2)
-                                                            
-                                                            Rectangle {
-                                                                width: parent.width; height: 45
-                                                                color: colorCardBg; radius: 6
-                                                                
-                                                                Row {
-                                                                    anchors.fill: parent
-                                                                    anchors.margins: 8
-                                                                    spacing: 8
-                                                                    
-                                                                    Column {
-                                                                        width: parent.width - 30; spacing: 2
-                                                                        Text {
-                                                                            text: modelData.title
-                                                                            color: colorTextSecondary
-                                                                            font.family: "JetBrainsMono Nerd Font"
-                                                                            font.pixelSize: 12
-                                                                            font.weight: Font.Medium
-                                                                            elide: Text.ElideRight; width: parent.width
-                                                                        }
-                                                                        Text {
-                                                                            text: modelData.body
-                                                                            color: colorTextSecondary
-                                                                            font.family: "JetBrainsMono Nerd Font"
-                                                                            font.pixelSize: 10
-                                                                            opacity: 0.6
-                                                                            elide: Text.ElideRight; width: parent.width
-                                                                        }
-                                                                    }
-                                                                    
-                                                                    Text {
-                                                                        text: "\uf00d"
-                                                                        color: colorTextSecondary
-                                                                        font.family: "JetBrainsMono Nerd Font"
-                                                                        font.pixelSize: 12
-                                                                        opacity: 0.5
-                                                                        anchors.verticalCenter: parent.verticalCenter
-                                                                        
-                                                                        MouseArea {
-                                                                            anchors.fill: parent
-                                                                            anchors.margins: -5
-                                                                            cursorShape: Qt.PointingHandCursor
-                                                                            onClicked: notifications = notifications.filter(n => n.id !== modelData.id)
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // ===== WALLPAPERS =====
-                                    Loader {
-                                        anchors.fill: parent
-                                        active: currentTab === 1
-                                        sourceComponent: Column {
-                                            spacing: 15
-                                            
-                                            Item {
-                                                id: carouselContainer
-                                                width: parent.width
-                                                height: 340
-                                                clip: true
-                                                
-                                                property real centerX: width / 2
-                                                property real centerY: height / 2
-                                                property real bigW: 500
-                                                property real bigH: 300
-                                                property real smallW: 150
-                                                property real smallH: 100
-                                                property real sideOffset: 30
-                                                
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    z: -1
-                                                    onWheel: wheel => wheel.angleDelta.y > 0 ? goToPrevWallpaper() : goToNextWallpaper()
-                                                }
-                                                
-                                                // Левое превью
-                                                Rectangle {
-                                                    id: leftPreview
-                                                    
-                                                    property real targetW: root.isAnimating && root.slideDirection === -1 ? 
-                                                        carouselContainer.smallW + (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress : 
-                                                        carouselContainer.smallW
-                                                    property real targetH: root.isAnimating && root.slideDirection === -1 ? 
-                                                        carouselContainer.smallH + (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress : 
-                                                        carouselContainer.smallH
-                                                    property real targetX: root.isAnimating && root.slideDirection === -1 ? 
-                                                        carouselContainer.sideOffset + (carouselContainer.centerX - carouselContainer.bigW/2 - carouselContainer.sideOffset) * root.animProgress : 
-                                                        carouselContainer.sideOffset
-                                                    
-                                                    width: targetW
-                                                    height: targetH
-                                                    x: targetX
-                                                    y: carouselContainer.centerY - height/2
-                                                    color: colorCardBg
-                                                    radius: root.isAnimating && root.slideDirection === -1 ? 8 + 4 * root.animProgress : 8
-                                                    clip: true
-                                                    visible: root.wallpaperList.length > 1
-                                                    z: root.isAnimating && root.slideDirection === -1 ? 10 : 1
-                                                    opacity: leftMouse.containsMouse ? 1.0 : (root.isAnimating && root.slideDirection === -1 ? 0.6 + 0.4 * root.animProgress : 0.6)
-                                                    scale: leftMouse.containsMouse && !root.isAnimating ? 1.05 : 1.0
-                                                    
-                                                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                                                    Behavior on scale { NumberAnimation { duration: 150 } }
-                                                    
-                                                    Image {
-                                                        anchors.fill: parent
-                                                        source: root.wallpaperList.length > 1 ? 
-                                                            "file://" + root.wallpaperList[(root.currentWallpaperIndex - 1 + root.wallpaperList.length) % root.wallpaperList.length] : ""
-                                                        fillMode: Image.PreserveAspectCrop
-                                                        asynchronous: true
-                                                        cache: true
-                                                    }
-                                                    
-                                                    MouseArea {
-                                                        id: leftMouse
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        cursorShape: Qt.PointingHandCursor
-                                                        onClicked: root.goToPrevWallpaper()
-                                                    }
-                                                }
-                                                
-                                                // Центральное изображение
-                                                Rectangle {
-                                                    id: centerWallpaper
-                                                    
-                                                    property real targetW: root.isAnimating ? 
-                                                        carouselContainer.bigW - (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress : 
-                                                        carouselContainer.bigW
-                                                    property real targetH: root.isAnimating ? 
-                                                        carouselContainer.bigH - (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress : 
-                                                        carouselContainer.bigH
-                                                    property real targetX: {
-                                                        if (!root.isAnimating) return carouselContainer.centerX - carouselContainer.bigW/2
-                                                        if (root.slideDirection === 1) {
-                                                            return carouselContainer.centerX - carouselContainer.bigW/2 + 
-                                                                (carouselContainer.sideOffset - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress
-                                                        } else {
-                                                            return carouselContainer.centerX - carouselContainer.bigW/2 + 
-                                                                (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress
-                                                        }
-                                                    }
-                                                    
-                                                    width: targetW
-                                                    height: targetH
-                                                    x: targetX
-                                                    y: carouselContainer.centerY - height/2
-                                                    color: colorCardBg
-                                                    radius: root.isAnimating ? 12 - 4 * root.animProgress : 12
-                                                    clip: true
-                                                    z: root.isAnimating ? 1 : 10
-                                                    opacity: root.isAnimating ? 1.0 - 0.4 * root.animProgress : 1.0
-                                                    
-                                                    Image {
-                                                        anchors.fill: parent
-                                                        source: root.wallpaperList.length > 0 ? 
-                                                            "file://" + root.wallpaperList[root.currentWallpaperIndex] : ""
-                                                        fillMode: Image.PreserveAspectCrop
-                                                        asynchronous: true
-                                                        cache: true
-                                                    }
-                                                    
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: "No wallpapers found\n\nAdd images to:\n~/Pictures/Wallpapers"
-                                                        color: colorTextSecondary
-                                                        font.family: "JetBrainsMono Nerd Font"
-                                                        font.pixelSize: 14
-                                                        opacity: 0.5
-                                                        horizontalAlignment: Text.AlignHCenter
-                                                        visible: root.wallpaperList.length === 0 && !root.isAnimating
-                                                    }
-                                                }
-                                                
-                                                // Правое превью
-                                                Rectangle {
-                                                    id: rightPreview
-                                                    
-                                                    property real targetW: root.isAnimating && root.slideDirection === 1 ? 
-                                                        carouselContainer.smallW + (carouselContainer.bigW - carouselContainer.smallW) * root.animProgress : 
-                                                        carouselContainer.smallW
-                                                    property real targetH: root.isAnimating && root.slideDirection === 1 ? 
-                                                        carouselContainer.smallH + (carouselContainer.bigH - carouselContainer.smallH) * root.animProgress : 
-                                                        carouselContainer.smallH
-                                                    property real targetX: root.isAnimating && root.slideDirection === 1 ? 
-                                                        (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - 
-                                                        (carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW - carouselContainer.centerX + carouselContainer.bigW/2) * root.animProgress) : 
-                                                        carouselContainer.width - carouselContainer.sideOffset - carouselContainer.smallW
-                                                    
-                                                    width: targetW
-                                                    height: targetH
-                                                    x: targetX
-                                                    y: carouselContainer.centerY - height/2
-                                                    color: colorCardBg
-                                                    radius: root.isAnimating && root.slideDirection === 1 ? 8 + 4 * root.animProgress : 8
-                                                    clip: true
-                                                    visible: root.wallpaperList.length > 1
-                                                    z: root.isAnimating && root.slideDirection === 1 ? 10 : 1
-                                                    opacity: rightMouse.containsMouse ? 1.0 : (root.isAnimating && root.slideDirection === 1 ? 0.6 + 0.4 * root.animProgress : 0.6)
-                                                    scale: rightMouse.containsMouse && !root.isAnimating ? 1.05 : 1.0
-                                                    
-                                                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                                                    Behavior on scale { NumberAnimation { duration: 150 } }
-                                                    
-                                                    Image {
-                                                        anchors.fill: parent
-                                                        source: root.wallpaperList.length > 1 ? 
-                                                            "file://" + root.wallpaperList[(root.currentWallpaperIndex + 1) % root.wallpaperList.length] : ""
-                                                        fillMode: Image.PreserveAspectCrop
-                                                        asynchronous: true
-                                                        cache: true
-                                                    }
-                                                    
-                                                    MouseArea {
-                                                        id: rightMouse
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        cursorShape: Qt.PointingHandCursor
-                                                        onClicked: root.goToNextWallpaper()
-                                                    }
-                                                }
-                                                
-                                                // Левая стрелка
-                                                IconButton {
-                                                    anchors.left: parent.left
-                                                    anchors.leftMargin: 190
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    width: 40
-                                                    height: 40
-                                                    icon: "\uf053"
-                                                    iconSize: 16
-                                                    visible: root.wallpaperList.length > 1
-                                                    z: 20
-                                                    onClicked: root.goToPrevWallpaper()
-                                                }
-                                                
-                                                // Правая стрелка
-                                                IconButton {
-                                                    anchors.right: parent.right
-                                                    anchors.rightMargin: 190
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    width: 40
-                                                    height: 40
-                                                    icon: "\uf054"
-                                                    iconSize: 16
-                                                    visible: root.wallpaperList.length > 1
-                                                    z: 20
-                                                    onClicked: root.goToNextWallpaper()
-                                                }
-                                            }
-                                            
-                                            // Счётчик и кнопка
-                                            Column {
-                                                width: parent.width
-                                                spacing: 12
-                                                
-                                                Text {
-                                                    anchors.horizontalCenter: parent.horizontalCenter
-                                                    text: root.wallpaperList.length > 0 ? 
-                                                        (root.currentWallpaperIndex + 1) + " / " + root.wallpaperList.length : "0 / 0"
-                                                    color: colorTextSecondary
-                                                    font.family: "JetBrainsMono Nerd Font"
-                                                    font.pixelSize: 14
-                                                    opacity: 0.7
-                                                }
-                                                
-                                                Rectangle {
-                                                    anchors.horizontalCenter: parent.horizontalCenter
-                                                    width: 200
-                                                    height: 45
-                                                    radius: 10
-                                                    color: setWpMouse.containsMouse ? Qt.lighter(colorBgWorkspaceActive, 1.1) : colorBgWorkspaceActive
-                                                    
-                                                    Behavior on color { ColorAnimation { duration: 150 } }
-                                                    
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: "Set as Wallpaper"
-                                                        color: colorTextWorkspaceActive
-                                                        font.family: "JetBrainsMono Nerd Font"
-                                                        font.pixelSize: 14
-                                                        font.weight: Font.Bold
-                                                    }
-                                                    
-                                                    MouseArea {
-                                                        id: setWpMouse
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        cursorShape: Qt.PointingHandCursor
-                                                        onClicked: {
-                                                            if (root.wallpaperList.length > 0) {
-                                                                swwwSetWallpaperProcess.wallpaperPath = root.wallpaperList[root.currentWallpaperIndex]
-                                                                swwwSetWallpaperProcess.running = true
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // ===== NETWORK =====
-                                    Loader {
-                                        anchors.fill: parent
-                                        active: currentTab === 2
-                                        sourceComponent: Column {
-                                            spacing: 15
-                                            
-                                            Row {
-                                                width: parent.width; height: 35; spacing: 10
-                                                
-                                                Repeater {
-                                                    model: ["WiFi", "Bluetooth"]
-                                                    
-                                                    Rectangle {
-                                                        width: (parent.width - 10) / 2; height: 35; radius: 8
-                                                        color: currentNetworkTab === index ? colorBgWorkspaceActive : 
-                                                               ntMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-                                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                                        
-                                                        Text {
-                                                            anchors.centerIn: parent
-                                                            text: modelData
-                                                            color: currentNetworkTab === index ? colorTextWorkspaceActive : colorTextSecondary
-                                                            font.family: "JetBrainsMono Nerd Font"
-                                                            font.pixelSize: 13
-                                                            font.weight: Font.Bold
                                                         }
                                                         
                                                         MouseArea {
-                                                            id: ntMouse
+                                                            id: brightSliderMouse
                                                             anchors.fill: parent
                                                             hoverEnabled: true
                                                             cursorShape: Qt.PointingHandCursor
-                                                            onClicked: currentNetworkTab = index
+                                                            
+                                                            function updateValue(mouseY) {
+                                                                let val = 100 - Math.max(0, Math.min(100, (mouseY / height) * 100))
+                                                                brightnessUserChanging = true
+                                                                brightness = Math.round(val)
+                                                                brightnessChangeProcess.targetBrightness = Math.round(val)
+                                                                brightnessChangeProcess.running = true
+                                                                Qt.callLater(() => brightnessUserChanging = false)
+                                                            }
+                                                            
+                                                            onPressed: updateValue(mouse.y)
+                                                            onPositionChanged: if (pressed) updateValue(mouse.y)
                                                         }
                                                     }
-                                                }
-                                            }
-                                            
-                                            // WiFi
-                                            Item {
-                                                width: parent.width
-                                                height: parent.height - 50
-                                                visible: currentNetworkTab === 0
-                                                
-                                                Column {
-                                                    anchors.fill: parent; spacing: 10
                                                     
-                                                    Row {
-                                                        width: parent.width; spacing: 10
+                                                    Text {
+                                                        text: brightness + "%"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 11
+                                                        color: colorTextSecondary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+                                                }
+                                                
+                                                // Громкость
+                                                Column {
+                                                    spacing: 15
+                                                    
+                                                    Text {
+                                                        text: volume === 0 ? "\uf6a9" : volume > 66 ? "\uf028" : volume > 33 ? "\uf027" : "\uf026"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 18
+                                                        color: colorTextPrimary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+                                                    
+                                                    Item {
+                                                        width: 30
+                                                        height: 230
+                                                        anchors.horizontalCenter: parent.horizontalCenter
                                                         
-                                                        Text {
-                                                            text: "WiFi Networks"
-                                                            color: colorTextSecondary
-                                                            font.family: "JetBrainsMono Nerd Font"
-                                                            font.pixelSize: 14
-                                                            font.weight: Font.Bold
-                                                            width: parent.width - 110
-                                                            anchors.verticalCenter: parent.verticalCenter
+                                                        Rectangle {
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            width: 8
+                                                            height: parent.height
+                                                            color: "#2a2a2a"
+                                                            radius: 4
+                                                            
+                                                            Rectangle {
+                                                                anchors.bottom: parent.bottom
+                                                                width: parent.width
+                                                                height: (volume / 100) * parent.height
+                                                                color: colorAccent
+                                                                radius: 4
+                                                            }
                                                         }
                                                         
                                                         Rectangle {
-                                                            width: 100; height: 30; radius: 6
-                                                            color: wifiScanMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-                                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            y: parent.height - (volume / 100) * parent.height - height / 2
+                                                            width: 20
+                                                            height: 20
+                                                            radius: 10
+                                                            color: colorAccent
                                                             
-                                                            Row {
-                                                                anchors.centerIn: parent; spacing: 6
-                                                                Text {
-                                                                    text: wifiScanning ? "\uf110" : "\uf021"
-                                                                    color: colorTextSecondary
-                                                                    font.family: "JetBrainsMono Nerd Font"
-                                                                    font.pixelSize: 12
-                                                                    RotationAnimation on rotation {
-                                                                        running: wifiScanning
-                                                                        from: 0; to: 360; duration: 1000
-                                                                        loops: Animation.Infinite
-                                                                    }
-                                                                }
-                                                                Text {
-                                                                    text: wifiScanning ? "Scanning" : "Scan"
-                                                                    color: colorTextSecondary
-                                                                    font.family: "JetBrainsMono Nerd Font"
-                                                                    font.pixelSize: 12
-                                                                }
+                                                            Behavior on y {
+                                                                enabled: !volSliderMouse.pressed
+                                                                NumberAnimation { duration: 100 }
+                                                            }
+                                                        }
+                                                        
+                                                        MouseArea {
+                                                            id: volSliderMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            
+                                                            function updateValue(mouseY) {
+                                                                let val = 100 - Math.max(0, Math.min(100, (mouseY / height) * 100))
+                                                                volumeUserChanging = true
+                                                                volume = Math.round(val)
+                                                                volumeChangeProcess.targetVolume = Math.round(val)
+                                                                volumeChangeProcess.running = true
+                                                                Qt.callLater(() => volumeUserChanging = false)
                                                             }
                                                             
-                                                            MouseArea {
-                                                                id: wifiScanMouse
-                                                                anchors.fill: parent
-                                                                hoverEnabled: true
-                                                                cursorShape: Qt.PointingHandCursor
-                                                                onClicked: scanWifi()
-                                                            }
+                                                            onPressed: updateValue(mouse.y)
+                                                            onPositionChanged: if (pressed) updateValue(mouse.y)
                                                         }
                                                     }
                                                     
-                                                    Flickable {
-                                                        width: parent.width
-                                                        height: parent.height - 50
-                                                        contentHeight: wifiCol.height
-                                                        clip: true
-                                                        
-                                                        Column {
-                                                            id: wifiCol
-                                                            width: parent.width; spacing: 8
-                                                            
-                                                            Text {
-                                                                text: wifiNetworks.length === 0 ? "No networks found. Click Scan." : ""
-                                                                color: colorTextSecondary
-                                                                font.family: "JetBrainsMono Nerd Font"
-                                                                font.pixelSize: 13
-                                                                opacity: 0.5
-                                                                visible: wifiNetworks.length === 0
-                                                                width: parent.width
-                                                                horizontalAlignment: Text.AlignHCenter
-                                                                topPadding: 20
-                                                            }
-                                                            
-                                                            Repeater {
-                                                                model: wifiNetworks
-                                                                NetworkItem {
-                                                                    icon: "\uf1eb"
-                                                                    name: modelData.ssid || "<Hidden>"
-                                                                    subtitle: modelData.signal + "% " + (modelData.secured ? "\uf023 Secured" : "\uf09c Open")
-                                                                    isConnected: modelData.connected
-                                                                    onConnectClicked: {
-                                                                        if (modelData.connected) {
-                                                                            wifiDisconnectProcess.running = true
-                                                                        } else {
-                                                                            wifiConnectProcess.ssid = modelData.ssid
-                                                                            wifiConnectProcess.running = true
-                                                                        }
-                                                                        Qt.callLater(scanWifi)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
+                                                    Text {
+                                                        text: volume + "%"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 11
+                                                        color: colorTextSecondary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
                                                     }
                                                 }
-                                            }
-                                            
-                                            // Bluetooth
-                                            Item {
-                                                width: parent.width
-                                                height: parent.height - 50
-                                                visible: currentNetworkTab === 1
                                                 
+                                                // Микрофон
                                                 Column {
-                                                    anchors.fill: parent; spacing: 10
+                                                    spacing: 15
                                                     
-                                                    Row {
-                                                        width: parent.width; spacing: 10
+                                                    Text {
+                                                        text: micVolume === 0 ? "\uf131" : "\uf130"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 18
+                                                        color: colorTextPrimary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+                                                    
+                                                    Item {
+                                                        width: 30
+                                                        height: 230
+                                                        anchors.horizontalCenter: parent.horizontalCenter
                                                         
-                                                        Text {
-                                                            text: "Bluetooth Devices"
-                                                            color: colorTextSecondary
-                                                            font.family: "JetBrainsMono Nerd Font"
-                                                            font.pixelSize: 14
-                                                            font.weight: Font.Bold
-                                                            width: parent.width - 110
-                                                            anchors.verticalCenter: parent.verticalCenter
+                                                        Rectangle {
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            width: 8
+                                                            height: parent.height
+                                                            color: "#2a2a2a"
+                                                            radius: 4
+                                                            
+                                                            Rectangle {
+                                                                anchors.bottom: parent.bottom
+                                                                width: parent.width
+                                                                height: (micVolume / 100) * parent.height
+                                                                color: colorAccent
+                                                                radius: 4
+                                                            }
                                                         }
                                                         
                                                         Rectangle {
-                                                            width: 100; height: 30; radius: 6
-                                                            color: btScanMouse.containsMouse ? colorButtonBgHover : colorButtonBg
-                                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                                            anchors.horizontalCenter: parent.horizontalCenter
+                                                            y: parent.height - (micVolume / 100) * parent.height - height / 2
+                                                            width: 20
+                                                            height: 20
+                                                            radius: 10
+                                                            color: colorAccent
                                                             
-                                                            Row {
-                                                                anchors.centerIn: parent; spacing: 6
-                                                                Text {
-                                                                    text: btScanning ? "\uf110" : "\uf021"
-                                                                    color: colorTextSecondary
-                                                                    font.family: "JetBrainsMono Nerd Font"
-                                                                    font.pixelSize: 12
-                                                                    RotationAnimation on rotation {
-                                                                        running: btScanning
-                                                                        from: 0; to: 360; duration: 1000
-                                                                        loops: Animation.Infinite
-                                                                    }
-                                                                }
-                                                                Text {
-                                                                    text: btScanning ? "Scanning" : "Scan"
-                                                                    color: colorTextSecondary
-                                                                    font.family: "JetBrainsMono Nerd Font"
-                                                                    font.pixelSize: 12
-                                                                }
+                                                            Behavior on y {
+                                                                enabled: !micSliderMouse.pressed
+                                                                NumberAnimation { duration: 100 }
+                                                            }
+                                                        }
+                                                        
+                                                        MouseArea {
+                                                            id: micSliderMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            
+                                                            function updateValue(mouseY) {
+                                                                let val = 100 - Math.max(0, Math.min(100, (mouseY / height) * 100))
+                                                                micUserChanging = true
+                                                                micVolume = Math.round(val)
+                                                                micChangeProcess.targetVolume = Math.round(val)
+                                                                micChangeProcess.running = true
+                                                                Qt.callLater(() => micUserChanging = false)
                                                             }
                                                             
-                                                            MouseArea {
-                                                                id: btScanMouse
-                                                                anchors.fill: parent
-                                                                hoverEnabled: true
-                                                                cursorShape: Qt.PointingHandCursor
-                                                                onClicked: scanBluetooth()
-                                                            }
+                                                            onPressed: updateValue(mouse.y)
+                                                            onPositionChanged: if (pressed) updateValue(mouse.y)
                                                         }
                                                     }
                                                     
-                                                    Flickable {
-                                                        width: parent.width
-                                                        height: parent.height - 50
-                                                        contentHeight: btCol.height
-                                                        clip: true
-                                                        
-                                                        Column {
-                                                            id: btCol
-                                                            width: parent.width; spacing: 8
-                                                            
-                                                            Text {
-                                                                text: bluetoothDevices.length === 0 ? "No paired devices.\nUse bluetoothctl to pair." : ""
-                                                                color: colorTextSecondary
-                                                                font.family: "JetBrainsMono Nerd Font"
-                                                                font.pixelSize: 13
-                                                                opacity: 0.5
-                                                                visible: bluetoothDevices.length === 0
-                                                                width: parent.width
-                                                                horizontalAlignment: Text.AlignHCenter
-                                                                topPadding: 20
-                                                            }
-                                                            
-                                                            Repeater {
-                                                                model: bluetoothDevices
-                                                                NetworkItem {
-                                                                    icon: modelData.type === "audio" ? "\uf025" : 
-                                                                          modelData.type === "input" ? "\uf11b" : 
-                                                                          modelData.type === "phone" ? "\uf10b" : "\uf294"
-                                                                    name: modelData.name
-                                                                    subtitle: modelData.connected ? "Connected" : "Paired"
-                                                                    isConnected: modelData.connected
-                                                                    onConnectClicked: {
-                                                                        if (modelData.connected) {
-                                                                            btDisconnectProcess.mac = modelData.mac
-                                                                            btDisconnectProcess.running = true
-                                                                        } else {
-                                                                            btConnectProcess.mac = modelData.mac
-                                                                            btConnectProcess.running = true
-                                                                        }
-                                                                        Qt.callLater(scanBluetooth)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
+                                                    Text {
+                                                        text: micVolume + "%"
+                                                        font.family: "JetBrainsMono Nerd Font"
+                                                        font.pixelSize: 11
+                                                        color: colorTextSecondary
+                                                        anchors.horizontalCenter: parent.horizontalCenter
                                                     }
                                                 }
                                             }
@@ -1695,22 +1642,20 @@ ShellRoot {
                         }
                     }
                     
-                    // Обновляем progress при изменении showDynamicIsland
                     onVisibleChanged: {
                         if (visible) {
-                            islandProgress = 1.0
+                            dashboardProgress = 1.0
                         }
                     }
                 }
                 
-                // Сбрасываем progress при закрытии
                 Connections {
                     target: root
-                    function onShowDynamicIslandChanged() {
-                        if (!showDynamicIsland) {
-                            islandProgress = 0.0
+                    function onShowDashboardChanged() {
+                        if (!showDashboard) {
+                            dashboardProgress = 0.0
                         } else {
-                            islandProgress = 1.0
+                            dashboardProgress = 1.0
                         }
                     }
                 }
@@ -1741,7 +1686,8 @@ ShellRoot {
                             spacing: 6
 
                             Rectangle {
-                                color: colorBgPrimary; radius: 5
+                                color: colorBgPrimary
+                                radius: 5
                                 Layout.preferredHeight: 30
                                 Layout.preferredWidth: wsRow.width + 18
 
@@ -1763,15 +1709,18 @@ ShellRoot {
                                                 return false
                                             }
 
-                                            width: 24; height: 24; radius: 5
-                                            color: isActive ? colorBgWorkspaceActive : 
-                                                   wsMouse.containsMouse ? colorBgWorkspaceHover : "transparent"
+                                            width: 24
+                                            height: 24
+                                            radius: 5
+                                            color: isActive ? colorAccent : 
+                                                   wsMouse.containsMouse ? Qt.rgba(0.91, 0.71, 0.64, 0.2) : "transparent"
+                                            
                                             Behavior on color { ColorAnimation { duration: 150 } }
 
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: wsBtn.wsNum
-                                                color: wsBtn.isActive ? colorTextWorkspaceActive : colorTextSecondary
+                                                color: wsBtn.isActive ? colorBgPrimary : colorTextPrimary
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 13
                                                 opacity: wsBtn.hasWindows || wsBtn.isActive ? 1.0 : 0.5
@@ -1790,12 +1739,14 @@ ShellRoot {
                             }
                         }
 
-                        // CENTER - Clock (триггер для Island)
+                        // CENTER - Clock (триггер для Dashboard)
                         Rectangle {
                             id: centerClock
                             anchors.centerIn: parent
-                            color: colorBgPrimary; radius: 5
-                            height: 30; width: clockRow.implicitWidth + 18
+                            color: colorBgPrimary
+                            radius: 5
+                            height: 30
+                            width: clockRow.implicitWidth + 18
 
                             Row {
                                 id: clockRow
@@ -1805,27 +1756,31 @@ ShellRoot {
                                 Text {
                                     id: clockDate
                                     text: Qt.formatDateTime(new Date(), "ddd dd MMM yyyy")
-                                    color: colorTextSecondary
+                                    color: colorTextPrimary
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
+                                
                                 Text {
                                     text: "\uf017"
-                                    color: colorTextSecondary
+                                    color: colorTextPrimary
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
+                                
                                 Text {
                                     id: clockTime
                                     text: Qt.formatDateTime(new Date(), "HH:mm")
-                                    color: colorTextSecondary
+                                    color: colorTextPrimary
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 13
                                 }
                             }
 
                             Timer {
-                                interval: 1000; running: true; repeat: true
+                                interval: 1000
+                                running: true
+                                repeat: true
                                 onTriggered: {
                                     let now = new Date()
                                     clockDate.text = Qt.formatDateTime(now, "ddd dd MMM yyyy")
@@ -1835,16 +1790,16 @@ ShellRoot {
 
                             HoverHandler {
                                 onHoveredChanged: {
-                                    isMouseOverIsland = hovered
-                                    if (hovered) openIsland()
-                                    else hideIslandTimer.restart()
+                                    isMouseOverDashboard = hovered
+                                    if (hovered) openDashboard()
+                                    else hideDashboardTimer.restart()
                                 }
                             }
                             
                             TapHandler {
                                 onTapped: {
-                                    if (showDynamicIsland) closeIsland()
-                                    else openIsland()
+                                    if (showDashboard) closeDashboard()
+                                    else openDashboard()
                                 }
                             }
                         }
@@ -1857,7 +1812,8 @@ ShellRoot {
 
                             // Language
                             Rectangle {
-                                color: colorBgPrimary; radius: 5
+                                color: colorBgPrimary
+                                radius: 5
                                 Layout.preferredHeight: 30
                                 Layout.preferredWidth: langRow.implicitWidth + 18
 
@@ -1865,18 +1821,34 @@ ShellRoot {
                                     id: langRow
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    Text { text: "\uf11c"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                    Text { text: currentLanguage; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
+                                    
+                                    Text {
+                                        text: "\uf11c"
+                                        color: colorTextPrimary
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
+                                    
+                                    Text {
+                                        text: currentLanguage
+                                        color: colorTextPrimary
+                                        font.family: "JetBrainsMono Nerd Font"
+                                        font.pixelSize: 13
+                                    }
                                 }
                             }
 
                             // Audio
                             Rectangle {
-                                color: colorBgPrimary; radius: 5
+                                color: colorBgPrimary
+                                radius: 5
                                 Layout.preferredHeight: 30
                                 Layout.preferredWidth: audioRow.implicitWidth + 18
 
-                                Process { id: pavuProcess; command: ["pavucontrol"] }
+                                Process {
+                                    id: pavuProcess
+                                    command: ["pavucontrol"]
+                                }
 
                                 Row {
                                     id: audioRow
@@ -1884,19 +1856,29 @@ ShellRoot {
                                     spacing: 6
 
                                     Item {
-                                        width: volRow.width; height: 30
+                                        width: volRow.width
+                                        height: 30
+                                        
                                         Row {
                                             id: volRow
                                             spacing: 4
                                             anchors.centerIn: parent
+                                            
                                             Text {
                                                 text: volume === 0 ? "\uf6a9" : volume > 66 ? "\uf028" : volume > 33 ? "\uf027" : "\uf026"
-                                                color: colorTextSecondary
+                                                color: colorTextPrimary
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 13
                                             }
-                                            Text { text: volume + "%"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
+                                            
+                                            Text {
+                                                text: volume + "%"
+                                                color: colorTextPrimary
+                                                font.family: "JetBrainsMono Nerd Font"
+                                                font.pixelSize: 13
+                                            }
                                         }
+                                        
                                         MouseArea {
                                             anchors.fill: parent
                                             acceptedButtons: Qt.LeftButton
@@ -1910,25 +1892,30 @@ ShellRoot {
                                     }
 
                                     Item {
-                                        width: micRow.width; height: 30
+                                        width: micRow.width
+                                        height: 30
+                                        
                                         Row {
                                             id: micRow
                                             spacing: 4
                                             anchors.centerIn: parent
+                                            
                                             Text {
                                                 text: micVolume === 0 ? "\uf131" : "\uf130"
-                                                color: colorTextSecondary
+                                                color: colorTextPrimary
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 13
                                             }
+                                            
                                             Text {
                                                 text: micVolume > 0 ? micVolume + "%" : ""
-                                                color: colorTextSecondary
+                                                color: colorTextPrimary
                                                 font.family: "JetBrainsMono Nerd Font"
                                                 font.pixelSize: 13
                                                 visible: micVolume > 0
                                             }
                                         }
+                                        
                                         MouseArea {
                                             anchors.fill: parent
                                             acceptedButtons: Qt.LeftButton
@@ -1945,7 +1932,8 @@ ShellRoot {
 
                             // Hardware
                             Rectangle {
-                                color: colorBgPrimary; radius: 5
+                                color: colorBgPrimary
+                                radius: 5
                                 Layout.preferredHeight: 30
                                 Layout.preferredWidth: hwRow.implicitWidth + 18
 
@@ -1953,26 +1941,56 @@ ShellRoot {
                                     id: hwRow
                                     anchors.centerIn: parent
                                     spacing: 10
+                                    
                                     Row {
                                         spacing: 4
-                                        Text { text: cpuUsage + "%"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                        Text { text: "\uf2db"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
+                                        
+                                        Text {
+                                            text: cpuUsage + "%"
+                                            color: colorTextPrimary
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 13
+                                        }
+                                        
+                                        Text {
+                                            text: "\uf2db"
+                                            color: colorTextPrimary
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 13
+                                        }
                                     }
+                                    
                                     Row {
                                         spacing: 4
-                                        Text { text: memoryUsage + "%"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13 }
-                                        Text { text: "\uefc5"; color: colorTextSecondary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
+                                        
+                                        Text {
+                                            text: memoryUsage + "%"
+                                            color: colorTextPrimary
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 13
+                                        }
+                                        
+                                        Text {
+                                            text: "\uefc5"
+                                            color: colorTextPrimary
+                                            font.family: "JetBrainsMono Nerd Font"
+                                            font.pixelSize: 14
+                                        }
                                     }
                                 }
                             }
 
                             // Network
                             Rectangle {
-                                color: colorBgPrimary; radius: 5
+                                color: colorBgPrimary
+                                radius: 5
                                 Layout.preferredHeight: 30
                                 Layout.preferredWidth: netText.implicitWidth + 18
 
-                                Process { id: nmProcess; command: ["nm-connection-editor"] }
+                                Process {
+                                    id: nmProcess
+                                    command: ["nm-connection-editor"]
+                                }
 
                                 MouseArea {
                                     id: netMouse
@@ -1986,14 +2004,15 @@ ShellRoot {
                                     id: netText
                                     anchors.centerIn: parent
                                     text: networkStatus === "wifi" ? "\uf1eb" : networkStatus === "ethernet" ? "\uf796" : "\uf06a"
-                                    color: colorTextSecondary
+                                    color: colorTextPrimary
                                     font.family: "JetBrainsMono Nerd Font"
                                     font.pixelSize: 15
                                 }
 
                                 Rectangle {
                                     visible: netMouse.containsMouse && networkSSID !== ""
-                                    color: colorBgPrimary; radius: 5
+                                    color: colorBgPrimary
+                                    radius: 5
                                     width: ttText.implicitWidth + 16
                                     height: ttText.implicitHeight + 8
                                     z: 1000
@@ -2005,7 +2024,7 @@ ShellRoot {
                                         id: ttText
                                         anchors.centerIn: parent
                                         text: "SSID: " + networkSSID
-                                        color: colorTextSecondary
+                                        color: colorTextPrimary
                                         font.family: "JetBrainsMono Nerd Font"
                                         font.pixelSize: 12
                                     }
