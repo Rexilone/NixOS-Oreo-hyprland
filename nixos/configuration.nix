@@ -6,6 +6,7 @@
       inputs.home-manager.nixosModules.home-manager
       ./hardware-configuration.nix
 
+      ./modules/programs/kdeconnect.nix
       ./modules/programs/hyprland.nix
       ./modules/programs/firefox.nix
       ./modules/programs/nixvim.nix
@@ -18,6 +19,7 @@
       ./modules/core/locale.nix
       ./modules/core/keymap.nix
       ./modules/core/hosts.nix
+      ./modules/core/user.nix
       ./modules/core/boot.nix
     ];
 
@@ -52,16 +54,6 @@
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
-
-  # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.rexilone = {
-    shell = pkgs.fish;
-    isNormalUser = true;
-    description = "rexilone";
-    extraGroups = [ "networkmanager" "wheel" "libvirtd" "kvm" "libvirt-qemu" "libvirt-admin" ]; # kvm,libvirt,,   
-    packages = with pkgs; [
-    ];
-  };
 
   nixpkgs.config.allowUnfree = true;
 
@@ -141,11 +133,6 @@
 
   # Enable the OpenSSH daemon.
   # services.openssh.enable = true;
-  programs.kdeconnect.enable = true;
-  networking.firewall = {
-    allowedTCPPortRanges = [ { from = 1714; to = 1764; } ];
-    allowedUDPPortRanges = [ { from = 1714; to = 1764; } ];
-  };
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
