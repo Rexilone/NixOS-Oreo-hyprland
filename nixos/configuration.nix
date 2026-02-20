@@ -5,8 +5,20 @@
     [
       inputs.home-manager.nixosModules.home-manager
       ./hardware-configuration.nix
-      ./modules/nixvim.nix
-      ./modules/hyprland.nix
+
+      ./modules/programs/hyprland.nix
+      ./modules/programs/firefox.nix
+      ./modules/programs/nixvim.nix
+      ./modules/programs/steam.nix
+
+      ./modules/services/pipewire.nix
+      ./modules/services/printing.nix
+
+      ./modules/core/timezone.nix
+      ./modules/core/locale.nix
+      ./modules/core/keymap.nix
+      ./modules/core/hosts.nix
+      ./modules/core/boot.nix
     ];
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -17,26 +29,9 @@
     backupFileExtension = "backup";
     extraSpecialArgs = { inherit inputs; };
     users.rexilone = {
-      imports = [ ./home.nix ];
+      imports = [ ./home/home.nix ];
     };
   };
-
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot = {
-    plymouth = {
-      enable = true;
-      theme = "breeze"; 
-    };
-
-    # Параметры ядра для "тихой" загрузки (скрывают текст логов)
-    kernelParams = [ "quiet" "splash" "boot.shell_on_fail" "loglevel=3" "rd.systemd.show_status=false" "rd.udev.log_level=3" "udev.log_priority=3" ];
-    # Использование systemd в initrd для более раннего запуска Plymouth
-    initrd.systemd.enable = true;
-  };
-
-  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
@@ -48,56 +43,12 @@
   # Enable networking
   networking.networkmanager.enable = true;
 
-  # Set your time zone.
-  time.timeZone = "Asia/Yakutsk";
-
-  # Select internationalisation properties.
-  i18n.defaultLocale = "ru_RU.UTF-8";
-
-  i18n.extraLocaleSettings = {
-    LC_ADDRESS = "ru_RU.UTF-8";
-    LC_IDENTIFICATION = "ru_RU.UTF-8";
-    LC_MEASUREMENT = "ru_RU.UTF-8";
-    LC_MONETARY = "ru_RU.UTF-8";
-    LC_NAME = "ru_RU.UTF-8";
-    LC_NUMERIC = "ru_RU.UTF-8";
-    LC_PAPER = "ru_RU.UTF-8";
-    LC_TELEPHONE = "ru_RU.UTF-8";
-    LC_TIME = "ru_RU.UTF-8";
-  };
-
   # Enable the X11 windowing system.
 #  services.xserver.enable = true;
 
   # Enable the GNOME Desktop Environment.
 #  services.displayManager.gdm.enable = true;
 #  services.desktopManager.gnome.enable = true;
-
-  # Configure keymap in X11
-  services.xserver.xkb = {
-    layout = "us,ru";
-    variant = "";
-    options = "grp:caps_toggle";
-  };
-
-  # Enable CUPS to print documents.
-  services.printing.enable = true;
-
-  # Enable sound with pipewire.
-  services.pulseaudio.enable = false;
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
-  };
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
@@ -112,14 +63,8 @@
     ];
   };
 
-  # Install firefox.
-  programs.firefox.enable = true;
-
-  # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
   environment.systemPackages = with pkgs; [
     home-manager
     brightnessctl
@@ -137,6 +82,7 @@
     btop
     swww
     rofi
+    tree
     jq
     p7zip
     obs-studio
@@ -157,6 +103,10 @@
     bluez
     bluez-tools
     blueman
+    # не на гит
+      (pkgs.ciscoPacketTracer8.override {
+      packetTracerSource = ./CiscoPacketTracer_820_Ubuntu_64bit.deb;
+    })
   ];
 
   security.polkit.enable = true; # для тунара шоб автомонтировал
@@ -175,6 +125,10 @@
     fira-code
   ];
 
+  nixpkgs.config.permittedInsecurePackages = [
+    "ciscoPacketTracer8-8.2.2"
+  ];
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;
@@ -187,22 +141,22 @@
 
   # Enable the OpenSSH daemon.
   # services.openssh.enable = true;
+  programs.kdeconnect.enable = true;
+  networking.firewall = {
+    allowedTCPPortRanges = [ { from = 1714; to = 1764; } ];
+    allowedUDPPortRanges = [ { from = 1714; to = 1764; } ];
+  };
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
-    programs.steam = {
-	enable = true;
-	remotePlay.openFirewall = true; 
-	dedicatedServer.openFirewall = true; 
-    };  
 
   virtualisation.libvirtd.enable = true; # виртуализация для кему
   
   programs.fish.enable = true;
-
+  programs.firejail.enable = true;
   system.stateVersion = "25.11"; # Did you read the comment?
 
 }
