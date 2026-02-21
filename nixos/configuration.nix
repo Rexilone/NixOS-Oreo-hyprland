@@ -7,6 +7,7 @@
       ./hardware-configuration.nix
 
       ./modules/programs/kdeconnect.nix
+      ./modules/programs/appimage.nix
       ./modules/programs/hyprland.nix
       ./modules/programs/firefox.nix
       ./modules/programs/nixvim.nix
@@ -76,6 +77,7 @@
     rofi
     tree
     jq
+    socat
     p7zip
     obs-studio
     # file
@@ -99,7 +101,14 @@
       (pkgs.ciscoPacketTracer8.override {
       packetTracerSource = ./CiscoPacketTracer_820_Ubuntu_64bit.deb;
     })
+    libdbusmenu-gtk3
+    libdbusmenu
+    wireplumber
   ];
+
+  environment.sessionVariables = {
+    GTK_MODULES = lib.mkForce ""; # Очистим, т.к. appmenu-gtk-module недоступен
+  };
 
   security.polkit.enable = true; # для тунара шоб автомонтировал
   services.gvfs.enable = true; # для телефона монтирования
@@ -115,6 +124,8 @@
     dejavu_fonts
     corefonts
     fira-code
+    # для ios
+    inter
   ];
 
   nixpkgs.config.permittedInsecurePackages = [
